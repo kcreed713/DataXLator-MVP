@@ -1,18 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataXLator&trade;</title>
     <style>
         /* Basic styling for layout */
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .container { display: flex; width: 90%; max-width: 1200px; margin-top: 20px; }
-        textarea { flex: 1; min-height: 400px; padding: 10px; font-family: monospace; font-size: 14px; border: 1px solid #ccc; }
-        .controls { padding: 0 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        button { margin: 10px 0; padding: 10px 20px; cursor: pointer; }
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            width: 90%;
+            max-width: 1200px;
+            margin-top: 20px;
+        }
+
+        textarea {
+            flex: 1;
+            min-height: 400px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #ccc;
+        }
+
+        .controls {
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            margin: 10px 0;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        /* Basic styling for color scheme */
+        body {
+            font-family: sans-serif;
+            background-color: #1E1E1E;
+            /* Dark Charcoal */
+            color: #D4D4D4;
+            /* Light Gray Text */
+            /* ... (other layout properties) ... */
+        }
+
+        textarea {
+            background-color: #252526;
+            /* Slightly darker than body for depth */
+            color: #D4D4D4;
+            border: 1px solid #3c3c3c;
+            /* Subtle border */
+            /* ... (other properties) ... */
+        }
+
+        button {
+            background-color: #007ACC;
+            /* Vibrant Blue Accent */
+            color: white;
+            border: none;
+            /* ... (other properties) ... */
+        }
     </style>
 </head>
+
 <body>
     <h1>DataXLator<sup>&trade;</sup></h1>
     <h1>JSON ↔ YAML Translator</h1>
@@ -23,12 +84,14 @@
             <p>Current Conversion:</p>
             <button id="convert-button" data-direction="json-to-yaml">Convert: JSON → YAML</button>
             <p style="margin-top: 50px;">---</p>
-            <button onclick="window.location.href='[YOUR_STRIPE_PAYMENT_LINK]'">Upgrade to DataXLator&trade; Pro: Bulk Converter</button>
+            <button onclick="window.location.href='[YOUR_STRIPE_PAYMENT_LINK]'">Upgrade to DataXLator&trade; Pro: Bulk
+                Converter</button>
         </div>
 
         <textarea id="output-data" placeholder="Translated data will appear here..." readonly></textarea>
     </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
