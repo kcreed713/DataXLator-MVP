@@ -1,76 +1,85 @@
-// --- 1. DOM Element Selection ---
+// --- 1. DOM Element Selection & State ---
 const inputData = document.getElementById('input-data');
 const outputData = document.getElementById('output-data');
-const convertButton = document.getElementById('convert-button');
+const executeConvertButton = document.getElementById('execute-convert');
+const swapButton = document.getElementById('swap-button');
+const directionDisplay = document.getElementById('direction-display');
 
-// --- 2. Conversion Functionality ---
+// Internal state to track the conversion direction
+let conversionDirection = 'json-to-yaml'; 
+
+// --- 2. State Management (UX Improvement) ---
 
 /**
- * Executes the conversion based on the current direction.
+ * Toggles the conversion direction state and updates the UI display.
+ */
+function toggleDirection() {
+    if (conversionDirection === 'json-to-yaml') {
+        conversionDirection = 'yaml-to-json';
+        directionDisplay.textContent = 'YAML ➡️ JSON';
+        inputData.placeholder = 'Paste YAML data here...';
+    } else {
+        conversionDirection = 'json-to-yaml';
+        directionDisplay.textContent = 'JSON ➡️ YAML';
+        inputData.placeholder = 'Paste JSON data here...';
+    }
+    // Clear output when direction changes for clarity
+    outputData.value = '';
+    outputData.placeholder = 'Conversion direction swapped. Ready to convert.';
+}
+
+// --- 3. Conversion Functionality ---
+
+/**
+ * Executes the conversion based on the current direction state.
  */
 function translateData() {
-    const direction = convertButton.getAttribute('data-direction');
     const input = inputData.value.trim();
     outputData.value = ''; // Clear previous output
     
     if (!input) {
-        outputData.placeholder = 'Paste data into the input box to translate.';
+        outputData.placeholder = 'Input is empty. Please paste data to begin translation.';
         return;
     }
 
     try {
-        if (direction === 'json-to-yaml') {
+        if (conversionDirection === 'json-to-yaml') {
             // JSON -> YAML
+            // 1. Parse the JSON string into a JavaScript object
             const data = JSON.parse(input);
-            // The yaml.dump method is provided by the js-yaml library
+            // 2. Use js-yaml's dump method to convert the object to YAML
             outputData.value = jsyaml.dump(data);
+
         } else {
             // YAML -> JSON
-            // The yaml.load method is provided by the js-yaml library
+            // 1. Use js-yaml's load method to convert the YAML string into a JavaScript object
             const data = jsyaml.load(input);
-            // Use JSON.stringify for clean, readable output (2-space indent)
+            // 2. Use JSON.stringify for clean, readable JSON output (2-space indent)
             outputData.value = JSON.stringify(data, null, 2);
         }
+
     } catch (e) {
-        // Simple error handling for bad input format
-        outputData.value = `ERROR: Invalid input format for ${direction === 'json-to-yaml' ? 'JSON' : 'YAML'}.\n\nPlease check your syntax.`;
+        // Display a clear error message in the output area
+        const inputType = conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML';
+        outputData.value = `ERROR: Invalid input format for ${inputType}.\n\nPlease check your syntax.`;
+        
+        // Optional: Log detailed error to console
         console.error('Translation Error:', e);
     }
 }
 
-/**
- * Toggles the conversion direction and updates the button text.
- */
-function toggleDirection() {
-    const currentDir = convertButton.getAttribute('data-direction');
-    
-    if (currentDir === 'json-to-yaml') {
-        convertButton.setAttribute('data-direction', 'yaml-to-json');
-        convertButton.textContent = 'Convert: YAML → JSON';
-    } else {
-        convertButton.setAttribute('data-direction', 'json-to-yaml');
-        convertButton.textContent = 'Convert: JSON → YAML';
-    }
-    
-    // Clear the output when direction changes to prompt re-translation
-    outputData.value = '';
-    outputData.placeholder = 'Conversion direction changed. Press "Convert" to translate the existing input.';
-}
+// --- 4. Event Listeners ---
 
-// --- 3. Event Listeners ---
+// 1. Dedicated Swap Button Listener
+swapButton.addEventListener('click', toggleDirection);
 
-// 1. Convert button listener (handles the translation)
-convertButton.addEventListener('click', translateData);
+// 2. Execute Convert Button Listener
+executeConvertButton.addEventListener('click', translateData);
 
-// 2. Input change listener (automatically converts as the user types)
-// Optional: Using 'input' for live updates. If performance is an issue, we can remove this.
+// 3. Optional: Live input update (converts immediately as user types)
+// NOTE: This can be resource intensive for very large files. 
+// We include it here for a better user experience on typical config files.
 inputData.addEventListener('input', translateData);
 
-// 3. Direction toggle functionality (same button also acts as the toggle)
-// We'll let the 'click' handler on the button handle the conversion, 
-// so we'll need a way to **just** toggle the direction too,
-// perhaps a separate small button or a double-click handler on the input itself. 
-// For simplicity and clarity right now, let's keep the single button focused on CONVERSION.
-// The user can edit the input and click 'Convert' again.
-
-// LATER REFINEMENT: A dedicated 'Toggle Direction' button would improve UX.
+// Set initial placeholder text based on the default direction
+inputData.placeholder = 'Paste JSON data here...';
