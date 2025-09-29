@@ -1,100 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DataXLator&trade;</title>
+    <title>DataXLator™ - JSON ↔ YAML Translator</title>
+    
+    <!-- Minimalist Dark Mode Styling (High Readability) -->
     <style>
-        /* Basic styling for layout */
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        /* General Setup */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
             padding: 20px;
+            background-color: #1E1E1E; /* Dark Charcoal */
+            color: #D4D4D4; /* Light Gray Text */
+            min-height: 100vh;
+        }
+        h1 { margin-bottom: 5px; }
+        .trademark { font-size: 0.5em; vertical-align: super; }
+        .subtitle { margin-top: 0; color: #999; }
+
+        /* Layout */
+        .container { 
+            display: flex; 
+            width: 95%; 
+            max-width: 1400px; 
+            margin-top: 20px; 
+            gap: 20px; 
+            flex-grow: 1;
+        }
+        
+        /* Text Areas (Code Input/Output) */
+        textarea { 
+            flex: 1; 
+            min-height: 400px; 
+            padding: 15px; 
+            font-family: 'Fira Code', monospace; 
+            font-size: 14px; 
+            border: 1px solid #3c3c3c; 
+            background-color: #252526; /* Input area background */
+            color: #D4D4D4;
+            resize: vertical;
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         }
 
-        .container {
-            display: flex;
-            width: 90%;
-            max-width: 1200px;
+        /* Controls Section */
+        .controls { 
+            padding: 0 10px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            min-width: 180px;
+        }
+
+        /* Buttons Base Style */
+        button { 
+            margin: 10px 0; 
+            padding: 10px 20px; 
+            cursor: pointer; 
+            border: none;
+            border-radius: 6px;
+            color: white; 
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: 600;
+            width: 100%;
+        }
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Primary Convert Button (Vibrant Blue) */
+        #execute-convert {
+            background-color: #007ACC; 
+            padding: 12px 20px;
             margin-top: 20px;
         }
-
-        textarea {
-            flex: 1;
-            min-height: 400px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 14px;
-            border: 1px solid #ccc;
+        #execute-convert:hover {
+            background-color: #005f99;
         }
-
-        .controls {
-            padding: 0 20px;
+        
+        /* Pricing Section Styling */
+        .pricing-section {
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
+            margin-top: 50px;
+            padding: 15px;
+            border: 1px dashed #555;
+            border-radius: 8px;
+            background-color: #222;
+        }
+        .pricing-section p {
+            margin: 5px 0;
+            font-weight: bold;
         }
 
-        button {
-            margin: 10px 0;
-            padding: 10px 20px;
-            cursor: pointer;
+        /* Monthly Button (Less prominent, standard green) */
+        #monthly-pro-button {
+            background-color: #4CAF50; 
+            margin-bottom: 5px;
+        }
+        #monthly-pro-button:hover {
+            background-color: #388E3C;
         }
 
-        /* Basic styling for color scheme */
-        body {
-            font-family: sans-serif;
-            background-color: #1E1E1E;
-            /* Dark Charcoal */
-            color: #D4D4D4;
-            /* Light Gray Text */
-            /* ... (other layout properties) ... */
+        /* Lifetime Button (More prominent, orange/gold for urgency) */
+        #lifetime-pro-button {
+            background-color: #FF9800; /* Orange/Gold for Urgency */
+            padding: 12px 20px;
+        }
+        #lifetime-pro-button:hover {
+            background-color: #FB8C00;
+        }
+        .urgent-text {
+            color: #FF9800;
+            font-size: 0.9em;
+            margin-top: 5px;
         }
 
-        textarea {
-            background-color: #252526;
-            /* Slightly darker than body for depth */
-            color: #D4D4D4;
-            border: 1px solid #3c3c3c;
-            /* Subtle border */
-            /* ... (other properties) ... */
+        /* Swap Button (Neutral Accent) */
+        #swap-button {
+            background: #3c3c3c; 
+            width: 80px;
+            height: 40px;
+            padding: 5px;
+            font-size: 1.5rem;
+            line-height: 1;
         }
-
-        button {
-            background-color: #007ACC;
-            /* Vibrant Blue Accent */
-            color: white;
-            border: none;
-            /* ... (other properties) ... */
+        #swap-button:hover {
+            background: #555;
+        }
+        
+        /* Direction Display */
+        #direction-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #007ACC; 
+            margin-bottom: 10px;
+        }
+        
+        /* Responsive Layout for Mobile */
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .controls { flex-direction: row; justify-content: space-around; width: 100%; margin-bottom: 20px; flex-wrap: wrap; }
+            .controls p { order: -1; }
+            #execute-convert { margin-top: 10px; width: 45%; padding: 8px 15px; }
+            #swap-button { width: 50px; height: 35px; }
+            .pricing-section { margin-top: 20px; width: 100%; }
         }
     </style>
 </head>
-
 <body>
-    <h1>DataXLator<sup>&trade;</sup></h1>
-    <h1>JSON ↔ YAML Translator</h1>
+    <h1>DataXLator<span class="trademark">™</span></h1>
+    <p class="subtitle">JSON ↔ YAML Configuration Converter (Free MVP)</p>
+    
     <div class="container">
-        <textarea id="input-data" placeholder="Paste your JSON or YAML data here..."></textarea>
+        <!-- Input Area -->
+        <textarea id="input-data" placeholder="Paste JSON data here..." title="Input Data Area"></textarea>
 
+        <!-- Controls -->
         <div class="controls">
-            <p>Current Conversion:</p>
-            <button id="convert-button" data-direction="json-to-yaml">Convert: JSON → YAML</button>
-            <p style="margin-top: 50px;">---</p>
-            <button onclick="window.location.href='[YOUR_STRIPE_PAYMENT_LINK]'">Upgrade to DataXLator&trade; Pro: Bulk
-                Converter</button>
+            <!-- 1. Direction Display -->
+            <p id="direction-display">JSON ➡️ YAML</p>
+
+            <!-- 2. Swap Button (UX Improvement) -->
+            <button id="swap-button" title="Swap Conversion Direction">
+                <span style="font-size: 1.5em;">🔄</span>
+            </button>
+            
+            <!-- 3. Execute Convert Button -->
+            <button id="execute-convert" title="Convert the data in the input field">Convert Data</button>
+
+            <!-- 4. DUAL PRICING SECTION -->
+            <div class="pricing-section">
+                <p>Unlock Pro Features:</p>
+                <button id="monthly-pro-button"
+                        onclick="window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                        title="Start a recurring monthly subscription">
+                    Pro Monthly: $7/mo
+                </button>
+                
+                <p style="margin: 15px 0 5px 0;">OR</p>
+
+                <button id="lifetime-pro-button"
+                        onclick="window.open('[REPLACE WITH STRIPE LIFETIME URL]', '_blank')"
+                        title="Get access forever with a single payment">
+                    Lifetime Access: $29
+                </button>
+                <p class="urgent-text">Limited Time Introductory Offer!</p>
+            </div>
         </div>
 
-        <textarea id="output-data" placeholder="Translated data will appear here..." readonly></textarea>
+        <!-- Output Area -->
+        <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
     </div>
+
     <footer>
-        <p>Copyright &copy; 2025 DataXLator&trade;. All rights reserved.</p>
+        <p style="font-size: 0.8em; margin-top: 40px; color: #555;">
+            Copyright &copy; 2025 DataXLator<span class="trademark">™</span>. All rights reserved.
+        </p>
     </footer>
+
+    <!-- --- JAVASCRIPT LIBRARIES & LOGIC --- -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="app.js"></script>
 </body>
-
 </html>
