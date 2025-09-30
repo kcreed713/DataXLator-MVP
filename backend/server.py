@@ -2,14 +2,15 @@ import io
 import json
 import zipfile
 import yaml
+import csv # Built-in Python module for CSV handling
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS # NEW: Import CORS module
+from flask_cors import CORS 
 from werkzeug.datastructures import FileStorage
 
 app = Flask(__name__)
 
-# NEW: Enable CORS for all routes (necessary for client-side JS on GitHub Pages to talk to localhost)
-# For production deployment, you would restrict this to your specific domain (e.g., origins="https://your-username.github.io")
+# Enable CORS for all routes (necessary for client-side JS on GitHub Pages to talk to localhost)
+# For production deployment, you would restrict this to your specific domain
 CORS(app) 
 
 # --- Configuration ---
@@ -30,7 +31,87 @@ def yaml_to_json(data_str):
     data = yaml.safe_load(data_str)
     return json.dumps(data, indent=2)
 
-# --- Core API Endpoint ---
+def json_to_sql_insert(json_data_str, table_name="your_table"):
+    """Converts a JSON array of objects to SQL INSERT statements."""
+    data = json.loads(json_data_str)
+    
+    if not isinstance(data, list) or not data:
+        raise ValueError("JSON data must be a non-empty array of objects.")
+        
+    # Assuming all objects have the same keys (headers)
+    keys = list(data[0].keys())
+    
+    sql_statements = []
+    
+    # Start building the template for the INSERT statement
+    cols_str = ", ".join(f"`{k}`" for k in keys)
+    insert_template = f"INSERT INTO `{table_name}` ({cols_str}) VALUES "
+    
+    
+    for row in data:
+        values = []
+        for key in keys:
+            value = row.get(key)
+            if value is None:
+                values.append("NULL")
+            elif isinstance(value, (int, float)):
+                values.append(str(value))
+            else:
+                # Escape single quotes and wrap in single quotes for SQL string literal
+                safe_value = str(value).replace("'", "''")
+                values.append(f"'{safe_value}'")
+        
+        values_str = ", ".join(values)
+        sql_statements.append(f"{insert_template}({values_str});")
+        
+    return "\n".join(sql_statements)
+
+
+def csv_to_json(csv_data_str):
+    """Converts a CSV string to a JSON array of objects."""
+    # Use StringIO to treat the string data like a file for the csv module
+    reader = csv.DictReader(io.StringIO(csv_data_str))
+    
+    # Read all rows into a list of dictionaries
+    data = list(reader)
+    
+    # Return the JSON string representation
+    return json.dumps(data, indent=2)
+
+# --- NEW: Single-Text PRO API Endpoints ---
+
+@app.route('/convert/csv-to-json', methods=['POST'])
+def single_csv_to_json():
+    """API to convert CSV text input to JSON output."""
+    data = request.get_data(as_text=True)
+    if not data:
+        return jsonify({"error": "CSV input is empty."}), 400
+    try:
+        json_output = csv_to_json(data)
+        return jsonify({"result": json_output})
+    except Exception as e:
+        return jsonify({"error": f"CSV Conversion Error: {str(e)}"}), 500
+
+@app.route('/convert/json-to-sql', methods=['POST'])
+def single_json_to_sql():
+    """API to convert JSON array input to SQL INSERT statements."""
+    data = request.get_data(as_text=True)
+    if not data:
+        return jsonify({"error": "JSON input is empty."}), 400
+        
+    # NOTE: In a production app, you would prompt the user for the table name. 
+    # For MVP, we use a placeholder 'dataxlator_table'.
+    table_name = request.args.get('table_name', 'dataxlator_table')
+
+    try:
+        sql_output = json_to_sql_insert(data, table_name=table_name)
+        return jsonify({"result": sql_output})
+    except ValueError as e:
+        return jsonify({"error": f"JSON Input Error: {str(e)}"}), 400
+    except Exception as e:
+        return jsonify({"error": f"SQL Generation Error: {str(e)}"}), 500
+
+# --- Core Bulk API Endpoint ---
 
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
@@ -39,6 +120,7 @@ def bulk_convert():
     """
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
+    # [Rest of bulk_convert function remains unchanged]
 
     file: FileStorage = request.files['file']
     
