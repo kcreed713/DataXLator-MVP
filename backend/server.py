@@ -3,9 +3,14 @@ import json
 import zipfile
 import yaml
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS # NEW: Import CORS module
 from werkzeug.datastructures import FileStorage
 
 app = Flask(__name__)
+
+# NEW: Enable CORS for all routes (necessary for client-side JS on GitHub Pages to talk to localhost)
+# For production deployment, you would restrict this to your specific domain (e.g., origins="https://your-username.github.io")
+CORS(app) 
 
 # --- Configuration ---
 # Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
