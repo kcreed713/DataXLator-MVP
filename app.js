@@ -1,12 +1,19 @@
 // --- Configuration ---
-// IMPORTANT: Change this URL when deploying your Flask server to a production environment (e.g., AWS, GCP).
-const BULK_API_URL = 'http://localhost:5000/bulk-convert'; // Default for local Python Flask testing
+// LIVE PRODUCTION API URL (Render Service)
+// Current endpoints:
+// Bulk Converter: API_BASE_URL + '/bulk-convert'
+// CSV to JSON (PRO): API_BASE_URL + '/convert/csv-to-json'
+// JSON to SQL (PRO): API_BASE_URL + '/convert/json-to-sql'
+const API_BASE_URL = 'https://dataxlator-api.onrender.com'; 
 
 // --- 1. DOM Element Selection ---
 const inputData = document.getElementById('input-data');
 const outputData = document.getElementById('output-data');
 const executeConvertButton = document.getElementById('execute-convert');
-const swapButton = document.getElementById('swap-button');
+
+// New Selectors for Conversion Direction
+const inputFormatSelect = document.getElementById('input-format-select');
+const outputFormatSelect = document.getElementById('output-format-select');
 const directionDisplay = document.getElementById('direction-display');
 
 // Bulk Converter Elements
@@ -15,33 +22,66 @@ const bulkConvertButton = document.getElementById('bulk-convert-button');
 const bulkMessage = document.getElementById('bulk-message');
 
 // Internal state to track the conversion direction
-let conversionDirection = 'json-to-yaml'; 
+let inputFormat = 'JSON';
+let outputFormat = 'YAML';
 
-// --- 2. State Management (Toggle Direction) ---
+// --- 2. State Management (Update Direction) ---
 
 /**
- * Toggles the conversion direction state and updates the UI display.
+ * Updates the conversion direction based on user selection in the dropdowns.
  */
-function toggleDirection() {
-    if (conversionDirection === 'json-to-yaml') {
-        conversionDirection = 'yaml-to-json';
-        directionDisplay.textContent = 'YAML ➡️ JSON';
-        inputData.placeholder = 'Paste YAML data here...';
-    } else {
-        conversionDirection = 'json-to-yaml';
-        directionDisplay.textContent = 'JSON ➡️ YAML';
-        inputData.placeholder = 'Paste JSON data here...';
-    }
+function updateDirection() {
+    inputFormat = inputFormatSelect.value;
+    outputFormat = outputFormatSelect.value;
+    
+    // Update the visual arrow display
+    directionDisplay.textContent = `${inputFormat} ➡️ ${outputFormat}`;
+
+    // Update input placeholder text
+    inputData.placeholder = `Paste ${inputFormat} data here...`;
+
+    // Clear output and messages when direction changes
     outputData.value = '';
-    outputData.placeholder = 'Conversion direction swapped. Paste new data or click Convert.';
+    outputData.placeholder = `Conversion set to ${inputFormat} ➡️ ${outputFormat}. Click Convert or paste data.`;
+    bulkMessage.textContent = ''; 
+
+    // The user must click the dedicated Convert button for server-side processing,
+    // so we disable input listening for non-JSON/YAML free features.
+    inputData.removeEventListener('input', translateData);
+    if (isClientSideConversion(inputFormat, outputFormat)) {
+        inputData.addEventListener('input', translateData);
+    }
 }
 
-// --- 3. Core Conversion Functionality (Free Feature) ---
+/**
+ * Checks if the current conversion direction can be handled client-side (JSON ↔ YAML).
+ */
+function isClientSideConversion(inputFmt, outputFmt) {
+    return (inputFmt === 'JSON' && outputFmt === 'YAML') || 
+           (inputFmt === 'YAML' && outputFmt === 'JSON');
+}
 
 /**
- * Executes the free, single-data conversion based on the current direction state.
+ * Determines if the selected conversion is a PRO feature.
  */
-function translateData() {
+function isProFeature(inputFmt, outputFmt) {
+    // YAML ↔ JSON is free (client-side)
+    if (isClientSideConversion(inputFmt, outputFmt)) return false;
+    
+    // All other defined conversions (CSV ↔ JSON, JSON ↔ SQL) are PRO (server-side)
+    if (inputFmt === 'CSV' && outputFmt === 'JSON') return true;
+    if (inputFmt === 'JSON' && outputFmt === 'SQL') return true;
+    
+    // Any other combination is currently unsupported
+    return false;
+}
+
+// --- 3. Core Conversion Functionality (Handles both Free and PRO) ---
+
+/**
+ * Executes the conversion based on the current direction, using client-side or API.
+ */
+async function translateData() {
     const input = inputData.value.trim();
     outputData.value = ''; 
     
@@ -50,28 +90,67 @@ function translateData() {
         return;
     }
 
-    try {
-        let data;
-        let output;
+    if (isClientSideConversion(inputFormat, outputFormat)) {
+        // --- FREE: Client-Side Conversion (JSON ↔ YAML) ---
+        try {
+            let data;
+            let output;
+            if (inputFormat === 'JSON') {
+                data = JSON.parse(input);
+                output = jsyaml.dump(data, { noCompatMode: true }); // jsyaml from CDN
+            } else {
+                data = jsyaml.load(input);
+                output = JSON.stringify(data, null, 2);
+            }
+            outputData.value = output;
 
-        if (conversionDirection === 'json-to-yaml') {
-            // JSON -> YAML Conversion
-            data = JSON.parse(input);
-            // jsyaml is loaded via CDN in index.html
-            output = jsyaml.dump(data, { noCompatMode: true });
+        } catch (e) {
+            outputData.value = `❌ ERROR in parsing ${inputFormat}:\n\n${e.message}\n\nPlease check your input syntax carefully.`;
+            console.error('DataXLator Translation Error:', e);
+        }
+    
+    } else if (isProFeature(inputFormat, outputFormat)) {
+        // --- PRO: Server-Side API Conversion (CSV, SQL) ---
+        
+        // In a real application, you would add a check here for subscription status.
 
-        } else {
-            // YAML -> JSON Conversion
-            data = jsyaml.load(input);
-            output = JSON.stringify(data, null, 2);
+        outputData.placeholder = '🔄 Converting via PRO API...';
+        executeConvertButton.disabled = true;
+
+        let apiUrl = '';
+        if (inputFormat === 'CSV' && outputFormat === 'JSON') {
+            apiUrl = API_BASE_URL + '/convert/csv-to-json';
+        } else if (inputFormat === 'JSON' && outputFormat === 'SQL') {
+            apiUrl = API_BASE_URL + '/convert/json-to-sql';
         }
         
-        outputData.value = output;
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: input
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                outputData.value = result.result; // Expects { "result": "..." }
+                outputData.placeholder = '✅ Conversion Complete.';
 
-    } catch (e) {
-        const inputType = conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML';
-        outputData.value = `❌ ERROR in parsing ${inputType}:\n\n${e.message}\n\nPlease check your input syntax carefully.`;
-        console.error('DataXLator Translation Error:', e);
+            } else {
+                const errorResult = await response.json();
+                outputData.value = `❌ API Error (${response.status}): ${errorResult.error || 'Unknown server error'}`;
+            }
+
+        } catch (error) {
+            console.error('API Fetch Error:', error);
+            outputData.value = `❌ Network Error: Could not connect to API at ${API_BASE_URL}.`;
+        } finally {
+            executeConvertButton.disabled = false;
+        }
+
+    } else {
+        // Unsupported or invalid conversion path
+        outputData.value = `⚠️ Conversion ${inputFormat} ➡️ ${outputFormat} is not currently supported.`;
     }
 }
 
@@ -84,6 +163,7 @@ async function handleBulkConversion() {
     const file = bulkFileInput.files[0];
 
     // 1. Basic Validation
+    
     if (!file) {
         bulkMessage.textContent = '❌ Please select a ZIP file.';
         return;
@@ -94,7 +174,6 @@ async function handleBulkConversion() {
     }
     
     // In a real application, you would add a check here for subscription status.
-    // For now, we assume the user is Pro to test the feature.
 
     bulkMessage.textContent = '🔄 Uploading and converting...';
     bulkConvertButton.disabled = true;
@@ -102,13 +181,15 @@ async function handleBulkConversion() {
     // 2. Prepare Form Data
     const formData = new FormData();
     formData.append('file', file);
+    
+    const apiUrl = API_BASE_URL + '/bulk-convert';
 
     try {
         // 3. Send Request to Flask Backend
-        const response = await fetch(BULK_API_URL, {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             body: formData,
-            // CORS Note: Flask server must be configured to allow CORS from your GitHub Pages domain.
+            // CORS must be enabled on the server (it is, using flask-cors)
         });
 
         if (response.ok) {
@@ -159,7 +240,7 @@ async function handleBulkConversion() {
     } catch (error) {
         // 7. Handle Network or CORS Errors
         console.error('Network or Fetch Error:', error);
-        bulkMessage.textContent = `❌ Connection Error. Is the backend server running at ${BULK_API_URL}?`;
+        bulkMessage.textContent = `❌ Connection Error. Check the API_BASE_URL and server status.`;
     } finally {
         bulkConvertButton.disabled = false;
         // Re-enable input if needed, but keeping file input clear is usually better UX
@@ -168,10 +249,15 @@ async function handleBulkConversion() {
 
 // --- 5. Event Listeners ---
 
-// Free Feature Listeners
-swapButton.addEventListener('click', toggleDirection);
-executeConvertButton.addEventListener('click', translateData);
-inputData.addEventListener('input', translateData);
+// Conversion Direction Listeners
+inputFormatSelect.addEventListener('change', updateDirection);
+outputFormatSelect.addEventListener('change', updateDirection);
 
-// Pro Feature Listener
+// Core Conversion Listener (Only triggered by button click for PRO features)
+executeConvertButton.addEventListener('click', translateData);
+
+// Bulk Feature Listener
 bulkConvertButton.addEventListener('click', handleBulkConversion);
+
+// Initialize the correct direction logic on load
+updateDirection();
