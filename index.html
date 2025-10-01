@@ -1,26 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SH37JYM6HP"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-SH37JYM6HP');
+    </script>
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataXLator™ - Universal Data Converter</title>
-    
+
     <style>
         /* General Setup */
-        body { 
-            font-family: 'Inter', sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             padding: 20px;
-            background-color: #1E1E1E; /* Background (Main): Dark Charcoal */
-            color: #D4D4D4; /* Text (Input/Output): Light Gray Text */
+            background-color: #1E1E1E;
+            /* Background (Main): Dark Charcoal */
+            color: #D4D4D4;
+            /* Text (Input/Output): Light Gray Text */
             min-height: 100vh;
-            overflow-y: auto; 
+            overflow-y: auto;
         }
-        h1 { margin-bottom: 5px; }
-        .trademark { font-size: 0.5em; vertical-align: super; }
-        .subtitle { margin-top: 0; color: #999; }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .trademark {
+            font-size: 0.5em;
+            vertical-align: super;
+        }
+
+        .subtitle {
+            margin-top: 0;
+            color: #999;
+        }
 
         /* Tabs and Tab Content */
         .tab-container {
@@ -30,6 +54,7 @@
             margin-top: 10px;
             border-bottom: 2px solid #3C3C3C;
         }
+
         .tab-button {
             padding: 10px 20px;
             cursor: pointer;
@@ -44,11 +69,13 @@
             width: 180px;
             text-align: center;
         }
+
         .tab-button.active {
             background-color: #252525;
             color: white;
             border-bottom: 2px solid #007ACC;
         }
+
         .tab-content {
             display: none;
             width: 100%;
@@ -57,8 +84,10 @@
             border-bottom-left-radius: 8px;
             border-bottom-right-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            margin-top: -2px; /* Pulls up to hide the bottom border line of the tab container */
+            margin-top: -2px;
+            /* Pulls up to hide the bottom border line of the tab container */
         }
+
         .tab-content.active {
             display: block;
         }
@@ -71,22 +100,29 @@
         }
 
         /* Text Areas (Code Input/Output) - RESTORED HEIGHT */
-        textarea { 
-            flex: 1; 
-            min-height: 400px; 
-            padding: 15px; 
-            font-size: 14px; 
-            font-family: 'Source Code Pro', monospace; 
-            background-color: #2D2D2D; 
-            color: #D4D4D4; 
-            border: 1px solid #3C3C3C; 
-            border-radius: 8px; 
-            resize: none; 
+        textarea {
+            flex: 1;
+            min-height: 400px;
+            padding: 15px;
+            font-size: 14px;
+            font-family: 'Source Code Pro', monospace;
+            background-color: #2D2D2D;
+            color: #D4D4D4;
+            border: 1px solid #3C3C3C;
+            border-radius: 8px;
+            resize: none;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
             transition: border-color 0.3s;
         }
-        textarea:focus { border-color: #007ACC; outline: none; }
-        textarea.error { border-color: #D32F2F; }
+
+        textarea:focus {
+            border-color: #007ACC;
+            outline: none;
+        }
+
+        textarea.error {
+            border-color: #D32F2F;
+        }
 
         /* Controls Panel (Central) */
         .controls-panel {
@@ -95,11 +131,12 @@
             flex-direction: column;
             align-items: center;
             gap: 15px;
-            padding: 0; /* Padding handled by tab content */
+            padding: 0;
+            /* Padding handled by tab content */
             background-color: transparent;
             box-shadow: none;
         }
-        
+
         /* Buttons - General Styling */
         button {
             padding: 10px 15px;
@@ -110,27 +147,35 @@
             transition: background-color 0.2s, transform 0.1s;
             width: 100%;
         }
-        button:hover { transform: translateY(-1px); }
-        button:disabled { 
-            background-color: #555; 
-            cursor: not-allowed; 
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
         }
 
         /* Primary Action Button (Convert) */
         #execute-convert {
-            background-color: #007ACC; 
+            background-color: #007ACC;
             color: white;
             margin-top: 5px;
             margin-bottom: 15px;
         }
-        #execute-convert:hover { background-color: #005A9C; } 
+
+        #execute-convert:hover {
+            background-color: #005A9C;
+        }
 
         /* Format Selectors */
         .format-selector-group {
             width: 100%;
             text-align: left;
-            margin-bottom: 5px; 
+            margin-bottom: 5px;
         }
+
         .format-selector-group label {
             display: block;
             margin-bottom: 5px;
@@ -138,6 +183,7 @@
             color: #999;
             font-size: 0.9em;
         }
+
         .format-selector-group select {
             width: 100%;
             padding: 8px;
@@ -147,7 +193,7 @@
             border: 1px solid #555;
             font-size: 1em;
         }
-        
+
         /* Teams Button (Now a top-right link) */
         #teams-link-container {
             position: absolute;
@@ -155,8 +201,9 @@
             right: 20px;
             z-index: 100;
         }
+
         #teams-link {
-            background-color: #4CAF50; 
+            background-color: #4CAF50;
             color: white;
             padding: 10px 20px;
             border-radius: 6px;
@@ -165,7 +212,10 @@
             display: inline-block;
             transition: background-color 0.2s;
         }
-        #teams-link:hover { background-color: #388E3C; }
+
+        #teams-link:hover {
+            background-color: #388E3C;
+        }
 
         /* Pricing/Pro Features Layout (Inside Tab) */
         .pricing-section-pro {
@@ -174,35 +224,40 @@
             text-align: center;
             padding: 20px;
         }
+
         .pricing-section-pro p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
             font-size: 1.1em;
         }
+
         .pricing-buttons-row {
-            display: flex; 
-            justify-content: center; 
+            display: flex;
+            justify-content: center;
             align-items: center;
             margin-top: 10px;
         }
+
         .pricing-buttons-row button {
-            margin: 0 15px; 
-            background-color: #D32F2F; 
+            margin: 0 15px;
+            background-color: #D32F2F;
             color: white;
-            padding: 10px 20px; 
-            font-size: 1em; 
-            width: 200px; 
+            padding: 10px 20px;
+            font-size: 1em;
+            width: 200px;
             flex-shrink: 0;
         }
+
         .or-text {
             font-size: 1em;
             color: #999;
             flex-shrink: 0;
         }
+
         .urgent-text {
-            color: #FFC107 !important; 
-            font-size: 0.9em !important; 
+            color: #FFC107 !important;
+            font-size: 0.9em !important;
             margin-top: 10px;
             margin-bottom: 20px;
         }
@@ -216,27 +271,31 @@
             padding: 20px;
             border-radius: 8px;
         }
+
         .bulk-converter-pro p {
-             font-weight: bold; 
-             color: #4CAF50;
+            font-weight: bold;
+            color: #4CAF50;
         }
+
         #bulk-convert-button {
             margin-top: 15px;
         }
 
         /* Footer */
-        footer { 
-            margin-top: 40px; 
-            width: 100%; 
+        footer {
+            margin-top: 40px;
+            width: 100%;
             max-width: 1400px;
             text-align: center;
         }
+
         footer a {
-            color: #007ACC; 
+            color: #007ACC;
             text-decoration: none;
         }
     </style>
 </head>
+
 <body>
 
     <h1>DataXLator<span class="trademark">™</span></h1>
@@ -258,7 +317,7 @@
     </div>
 
     <div id="tab-content" style="width: 95%; max-width: 1400px;">
-        
+
         <div id="free" class="tab-content active">
             <div class="free-converter-layout">
                 <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
@@ -287,24 +346,25 @@
                     </button>
                 </div>
 
-                <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
+                <textarea id="output-data" placeholder="Translated data will appear here..." readonly
+                    title="Output Data Area"></textarea>
             </div>
         </div>
 
         <div id="pro" class="tab-content">
             <div class="pricing-section-pro">
                 <p>Unlock Pro Features:</p>
-                
+
                 <div class="pricing-buttons-row">
                     <button id="monthly-pro-button"
-                            onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
-                            title="Start a recurring monthly subscription">
+                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                        title="Start a recurring monthly subscription">
                         Pro Monthly: $7/mo
                     </button>
                     <span class="or-text">OR</span>
                     <button id="lifetime-pro-button"
-                            onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
-                            title="Get access forever with a single payment">
+                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                        title="Get access forever with a single payment">
                         Lifetime Access: $29
                     </button>
                 </div>
@@ -322,10 +382,11 @@
             </div>
         </div>
     </div>
-    
+
     <footer>
         <p style="font-size: 0.8em; margin-top: 40px; color: #555;">
-            Copyright &copy; 2025 DataXLator<span class="trademark">™</span>. <a href="LICENSE.md" style="color: #007ACC; text-decoration: none;">All rights reserved.</a>
+            Copyright &copy; 2025 DataXLator<span class="trademark">™</span>. <a href="LICENSE.md"
+                style="color: #007ACC; text-decoration: none;">All rights reserved.</a>
         </p>
     </footer>
 
@@ -348,4 +409,5 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
