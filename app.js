@@ -170,10 +170,14 @@ async function handleBulkConversion() {
 
 // --- 6. Event Listeners ---
 
-// Free Feature Listeners
-swapButton.addEventListener('click', toggleDirection);
+// Single-File Feature Listeners
+// Note: We REMOVE the redundant swapButton listener.
 executeConvertButton.addEventListener('click', translateData);
 inputData.addEventListener('input', translateData);
 
-// Pro Feature Listener (CRITICAL FIX HERE)
+// CRITICAL FIX: The conversion should run whenever a format is selected.
+inputFormat.addEventListener('change', translateData);
+outputFormat.addEventListener('change', translateData);
+
+// Pro Feature Listener
 bulkConvertButton.addEventListener('click', handleBulkConversion);

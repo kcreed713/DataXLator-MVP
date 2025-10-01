@@ -61,12 +61,36 @@
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
         }
+        
+        /* Primary Action Button (Convert) */
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+        }
+        button:hover { transform: translateY(-1px); }
+        button:disabled { 
+            background-color: #555; 
+            cursor: not-allowed; 
+        }
+
+        #execute-convert {
+            background-color: #007ACC; /* Accent/Action: Vibrant Blue */
+            color: white;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        #execute-convert:hover { background-color: #005A9C; } 
 
         /* Format Selectors */
         .format-selector-group {
             width: 100%;
             text-align: left;
-            margin-bottom: 10px;
+            margin-bottom: 5px; /* Reduced margin to tighten layout */
         }
         .format-selector-group label {
             display: block;
@@ -84,38 +108,37 @@
             border: 1px solid #555;
             font-size: 1em;
         }
-        
-        /* Buttons */
-        button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.2s, transform 0.1s;
-            width: 100%;
-        }
-        button:hover { transform: translateY(-1px); }
-        button:disabled { 
-            background-color: #555; 
-            cursor: not-allowed; 
-        }
 
-        /* Primary Action Button (Convert) */
-        #execute-convert {
-            background-color: #007ACC; /* Accent/Action: Vibrant Blue */
+        /* Bulk Converter Section */
+        .bulk-converter {
+            width: 100%;
+            border-top: 1px solid #3C3C3C;
+            padding-top: 15px;
+            margin-top: 20px;
+            text-align: center;
+            order: 4; /* Ensures it's after the free conversion */
+        }
+        #bulk-message {
+            min-height: 20px;
+            color: #D32F2F; 
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        #bulk-convert-button {
+            background-color: #007ACC; 
             color: white;
             margin-top: 10px;
         }
-        #execute-convert:hover { background-color: #005A9C; } /* Slightly darker blue on hover */
-
-        /* Swap Button (Secondary Action) */
-        #swap-button {
-            background-color: #555;
+        #bulk-convert-button:hover { background-color: #005A9C; }
+        
+        /* Teams Button */
+        #teams-button {
+            background-color: #4CAF50; 
             color: white;
-            margin-bottom: 20px;
+            margin-top: 20px;
+            order: 1; /* Pushes to the very top */
         }
-        #swap-button:hover { background-color: #444; }
+        #teams-button:hover { background-color: #388E3C; }
 
         /* Pricing/Pro Section */
         .pricing-section {
@@ -124,54 +147,26 @@
             border-top: 1px solid #3C3C3C;
             padding-top: 15px;
             margin-top: 20px;
+            order: 2; /* Pushes to the second highest position */
         }
         .pricing-section p {
             margin: 0;
             font-weight: bold;
-            color: #4CAF50; /* Success/Copy: Green for emphasis */
+            color: #4CAF50;
             font-size: 1.1em;
         }
         .pricing-section button {
             margin-top: 10px;
-            background-color: #D32F2F; /* Deep Red for urgent CTA */
+            background-color: #D32F2F; 
             color: white;
             padding: 12px 15px;
             font-size: 1em;
         }
         .pricing-section button:hover { background-color: #B71C1C; }
         .urgent-text {
-            color: #FFC107 !important; /* Amber/Yellow for limited time */
+            color: #FFC107 !important; 
             font-size: 0.9em !important;
         }
-        
-        /* Bulk Converter Section */
-        .bulk-converter {
-            width: 100%;
-            border-top: 1px solid #3C3C3C;
-            padding-top: 15px;
-            margin-top: 20px;
-            text-align: center;
-        }
-        #bulk-message {
-            min-height: 20px;
-            color: #D32F2F; /* Error: Deep Red for error messages */
-            font-size: 0.9em;
-            margin-top: 5px;
-        }
-        #bulk-convert-button {
-            background-color: #007ACC; /* Accent/Action: Vibrant Blue */
-            color: white;
-            margin-top: 10px;
-        }
-        #bulk-convert-button:hover { background-color: #005A9C; }
-        
-        /* Teams Button */
-        #teams-button {
-            background-color: #4CAF50; /* Green for B2B/Enterprise CTA */
-            color: white;
-            margin-top: 20px;
-        }
-        #teams-button:hover { background-color: #388E3C; }
 
         /* Footer */
         footer { 
@@ -181,7 +176,7 @@
             text-align: center;
         }
         footer a {
-            color: #007ACC; /* Accent/Action: Vibrant Blue for links */ 
+            color: #007ACC; 
             text-decoration: none;
         }
     </style>
@@ -196,48 +191,13 @@
 
         <div class="controls-panel">
             
-            <div class="format-selector-group">
-                <label for="input-format">Input Format:</label>
-                <select id="input-format">
-                    <option value="json">JSON</option>
-                    <option value="yaml">YAML</option>
-                    <option value="csv">CSV (PRO)</option>
-                </select>
-            </div>
-
-            <div class="format-selector-group">
-                <label for="output-format">Output Format:</label>
-                <select id="output-format">
-                    <option value="yaml">YAML</option>
-                    <option value="json">JSON</option>
-                    <option value="sql">SQL INSERT (PRO)</option>
-                </select>
-            </div>
-            
-            <button id="swap-button" title="Swap Input and Output Formats">
-                Swap Formats
-            </button>
-
-            <button id="execute-convert" title="Execute Single File Conversion">
-                Convert Data
-            </button>
-            
-            <a href="teams.html" style="width: 100%; text-decoration: none;">
+            <a href="teams.html" style="width: 100%; text-decoration: none; order: 1;">
                 <button id="teams-button" title="Upgrade to our B2B Teams plan">
                     For Teams & Enterprise
                 </button>
             </a>
 
-            <div class="bulk-converter">
-                <p style="margin-bottom: 5px; font-weight: bold; color: #4CAF50;">PRO: Bulk ZIP Conversion</p>
-                <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
-                <button id="bulk-convert-button" title="Upload and convert multiple files">
-                    Bulk Convert Files
-                </button>
-                <div id="bulk-message"></div>
-            </div>
-
-            <div class="pricing-section">
+            <div class="pricing-section" style="order: 2;">
                 <p>Unlock Pro Features:</p>
                 <button id="monthly-pro-button"
                         onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
@@ -254,6 +214,38 @@
                 </button>
                 <p class="urgent-text">Limited Time Introductory Offer!</p>
             </div>
+            
+            <div class="format-selector-group" style="order: 3;">
+                <label for="input-format">Input Format:</label>
+                <select id="input-format">
+                    <option value="json">JSON</option>
+                    <option value="yaml">YAML</option>
+                    <option value="csv">CSV (PRO)</option>
+                </select>
+            </div>
+
+            <div class="format-selector-group" style="order: 3;">
+                <label for="output-format">Output Format:</label>
+                <select id="output-format">
+                    <option value="yaml">YAML</option>
+                    <option value="json">JSON</option>
+                    <option value="sql">SQL INSERT (PRO)</option>
+                </select>
+            </div>
+
+            <button id="execute-convert" title="Execute Single File Conversion" style="order: 3;">
+                Convert Data
+            </button>
+            
+            <div class="bulk-converter" style="order: 4;">
+                <p style="margin-bottom: 5px; font-weight: bold; color: #4CAF50;">PRO: Bulk ZIP Conversion</p>
+                <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
+                <button id="bulk-convert-button" title="Upload and convert multiple files">
+                    Bulk Convert Files
+                </button>
+                <div id="bulk-message"></div>
+            </div>
+
         </div>
 
         <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
