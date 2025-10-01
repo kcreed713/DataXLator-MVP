@@ -42,9 +42,20 @@ function toggleDirection() {
 
 // --- 3. Analytics Tracking (Placeholder) ---
 
-function trackEvent(eventName, eventProperties = {}) {
-    // Simple console log for MVP launch. Replace with GA/PostHog SDK later.
-    console.log(`[ANALYTICS] Event: ${eventName}`, eventProperties);
+/**
+ * Custom function to track business objectives (monetization).
+ * Sends custom events to Google Analytics 4 (GA4).
+ * @param {string} eventName - The name of the event (e.g., 'CTA_Click_Upgrade_Button').
+ * @param {object} eventData - Custom parameters (e.g., { type: 'monthly' }).
+ */
+function trackEvent(eventName, eventData = {}) {
+    // Console log for local debugging (will still fire in production, but GA gets the data)
+    console.log(`[ANALYTICS] Tracking Event: ${eventName}`, eventData);
+    
+    // GA4 IMPLEMENTATION: Check if the gtag function exists before calling it
+    if (typeof gtag === 'function') { 
+        gtag('event', eventName, eventData);
+    }
 }
 
 // --- 4. Conversion Logic (Free Tier) ---
