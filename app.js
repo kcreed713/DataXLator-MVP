@@ -1,6 +1,7 @@
 // --- Configuration ---
+
 // IMPORTANT: This URL has been updated to your Render deployment.
-const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert'; 
+const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
 
 // --- 1. DOM Element Selection ---
 const inputData = document.getElementById('input-data');
@@ -33,10 +34,10 @@ function toggleDirection() {
         inputData.placeholder = 'Paste JSON data here...';
     }
     outputData.value = '';
+
     outputData.classList.remove('error');
     bulkMessage.textContent = ''; // Clear bulk message on direction change
 }
-
 
 // --- 3. Analytics Tracking (Placeholder) ---
 
@@ -59,6 +60,7 @@ function translateData() {
     }
 
     try {
+
         // Since the free conversion is done purely in the browser, we use built-in functions
         if (conversionDirection === 'json-to-yaml') {
             const jsonObject = JSON.parse(data);
@@ -92,6 +94,14 @@ async function handleBulkConversion() {
         bulkMessage.textContent = 'Only one ZIP file can be uploaded at a time.';
         return;
     }
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+        bulkMessage.textContent = '❌ Only ZIP files are supported for bulk conversion.';
+        return;
+    }
+    
+    // In a real application, you would add a check here for subscription status.
+    // For now, we assume the user is Pro to test the feature.
+
 
     const zipFile = files[0];
     const formData = new FormData();
@@ -105,12 +115,15 @@ async function handleBulkConversion() {
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
     
     try {
+        // 3. Send Request to Flask Backend
         const response = await fetch(BULK_API_URL, {
             method: 'POST',
             body: formData,
+            // CORS Note: Flask server must be configured to allow CORS from your GitHub Pages domain.
         });
 
         if (response.ok) {
+
             // 1. Get the converted file as a Blob
             const blob = await response.blob();
 
