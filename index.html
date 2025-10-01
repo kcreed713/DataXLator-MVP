@@ -149,39 +149,50 @@
         }
         #teams-button:hover { background-color: #388E3C; }
 
-        /* Pricing/Pro Section (TOP LEFT CORNER - SMALLER/TIGHTER) */
+        /* Pricing/Pro Section (TOP LEFT CORNER - TIGHTEST LAYOUT) */
         .pricing-section-fixed {
-            position: fixed; /* Fixed position so it stays put */
-            top: 25px; /* Aligns with the Teams button */
+            position: fixed; 
+            top: 25px; 
             left: 20px;
             z-index: 99;
             background-color: #252525;
-            padding: 15px;
+            padding: 10px; /* Reduced padding */
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            width: 200px; /* FIXED WIDTH to make it compact */
+            width: 280px; /* Increased width slightly to accommodate side-by-side buttons */
             text-align: center;
-            /* Ensures it stays above the text area without overlap */
-            /* We will ensure the body padding/container margin keeps it away from the input area */
         }
         .pricing-section-fixed p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
-            font-size: 1em; /* Slightly smaller font */
+            font-size: 1em; 
         }
-        .pricing-section-fixed button {
-            margin-top: 8px; /* Tighter button spacing */
+        .pricing-buttons-row {
+            display: flex; /* NEW: Horizontal layout */
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .pricing-buttons-row button {
+            margin: 0 5px; /* Spacing between buttons */
             background-color: #D32F2F; 
             color: white;
-            padding: 8px 10px; /* Smaller button padding */
-            font-size: 0.9em; /* Smaller button font */
-            width: 100%;
+            padding: 8px 10px; 
+            font-size: 0.9em; 
+            width: 45%; /* Buttons share space */
         }
-        .pricing-section-fixed button:hover { background-color: #B71C1C; }
+        .pricing-buttons-row button:first-child { margin-left: 0; }
+        .pricing-buttons-row button:last-child { margin-right: 0; }
+        .or-text {
+            font-size: 0.8em;
+            color: #999;
+            flex-shrink: 0; /* Prevents "OR" from shrinking */
+        }
         .urgent-text {
             color: #FFC107 !important; 
-            font-size: 0.8em !important; /* Smallest font for urgency */
+            font-size: 0.8em !important; 
+            margin-top: 5px;
         }
 
         /* Footer */
@@ -211,20 +222,22 @@
     </div>
 
     <div class="pricing-section-fixed">
-        <p>Unlock Pro Features:</p>
-        <button id="monthly-pro-button"
-                onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
-                title="Start a recurring monthly subscription">
-            Pro Monthly: $7/mo
-        </button>
+        <p style="margin-bottom: 8px;">Unlock Pro Features:</p>
         
-        <p style="margin: 10px 0 5px 0; font-size: 0.8em;">OR</p>
+        <div class="pricing-buttons-row">
+            <button id="monthly-pro-button"
+                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                    title="Start a recurring monthly subscription">
+                Monthly: $7/mo
+            </button>
+            <span class="or-text">OR</span>
+            <button id="lifetime-pro-button"
+                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                    title="Get access forever with a single payment">
+                Lifetime: $29
+            </button>
+        </div>
 
-        <button id="lifetime-pro-button"
-                onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
-                title="Get access forever with a single payment">
-            Lifetime Access: $29
-        </button>
         <p class="urgent-text">Limited Time Introductory Offer!</p>
     </div>
     
