@@ -16,23 +16,61 @@
             background-color: #1E1E1E; /* Background (Main): Dark Charcoal */
             color: #D4D4D4; /* Text (Input/Output): Light Gray Text */
             min-height: 100vh;
-            overflow-y: auto; /* Allow scroll if needed, but strive to fit */
+            overflow-y: auto; 
         }
         h1 { margin-bottom: 5px; }
         .trademark { font-size: 0.5em; vertical-align: super; }
         .subtitle { margin-top: 0; color: #999; }
 
-        /* Layout */
-        .container { 
-            display: flex; 
-            width: 95%; 
-            max-width: 1400px; 
-            margin-top: 20px; 
-            gap: 20px; 
-            flex-grow: 1;
+        /* Tabs and Tab Content */
+        .tab-container {
+            display: flex;
+            width: 95%;
+            max-width: 1400px;
+            margin-top: 10px;
+            border-bottom: 2px solid #3C3C3C;
         }
-        
-        /* Text Areas (Code Input/Output) */
+        .tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background-color: #2D2D2D;
+            color: #999;
+            font-weight: bold;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            margin-right: 5px;
+            transition: background-color 0.2s, color 0.2s;
+            width: 180px;
+            text-align: center;
+        }
+        .tab-button.active {
+            background-color: #252525;
+            color: white;
+            border-bottom: 2px solid #007ACC;
+        }
+        .tab-content {
+            display: none;
+            width: 100%;
+            background-color: #252525;
+            padding: 20px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            margin-top: -2px; /* Pulls up to hide the bottom border line of the tab container */
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Free Converter Layout (Inside Tab) */
+        .free-converter-layout {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* Text Areas (Code Input/Output) - RESTORED HEIGHT */
         textarea { 
             flex: 1; 
             min-height: 400px; 
@@ -57,10 +95,9 @@
             flex-direction: column;
             align-items: center;
             gap: 15px;
-            padding: 20px;
-            background-color: #252525;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            padding: 0; /* Padding handled by tab content */
+            background-color: transparent;
+            box-shadow: none;
         }
         
         /* Buttons - General Styling */
@@ -111,56 +148,33 @@
             font-size: 1em;
         }
         
-        /* Bulk Converter Section */
-        .bulk-converter {
-            width: 100%;
-            border-top: 1px solid #3C3C3C;
-            padding-top: 15px;
-            margin-top: 10px; 
-            text-align: center;
-        }
-        #bulk-message {
-            min-height: 20px;
-            color: #D32F2F; 
-            font-size: 0.9em;
-            margin-top: 5px;
-        }
-        #bulk-convert-button {
-            background-color: #007ACC; 
-            color: white;
-            margin-top: 10px;
-        }
-        #bulk-convert-button:hover { background-color: #005A9C; }
-        
-        /* Teams Button (TOP RIGHT CORNER) */
-        #teams-button-container {
+        /* Teams Button (Now a top-right link) */
+        #teams-link-container {
             position: absolute;
             top: 25px;
             right: 20px;
             z-index: 100;
         }
-        #teams-button {
+        #teams-link {
             background-color: #4CAF50; 
             color: white;
             padding: 10px 20px;
-            width: auto; 
-            min-width: 200px;
-            font-size: 1em;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: background-color 0.2s;
         }
-        #teams-button:hover { background-color: #388E3C; }
+        #teams-link:hover { background-color: #388E3C; }
 
-        /* Pricing/Pro Section (BOTTOM STRETCHED BANNER) */
-        .pricing-section-bottom {
-            width: 95%; /* Stretch across the main content width */
-            max-width: 1400px;
-            margin: 40px auto 0 auto; /* Margin above, centered */
-            background-color: #252525;
-            padding: 15px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        /* Pricing/Pro Features Layout (Inside Tab) */
+        .pricing-section-pro {
+            width: 50%;
+            margin: 0 auto;
             text-align: center;
+            padding: 20px;
         }
-        .pricing-section-bottom p {
+        .pricing-section-pro p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
@@ -168,17 +182,17 @@
         }
         .pricing-buttons-row {
             display: flex; 
-            justify-content: center; /* Center the entire row */
+            justify-content: center; 
             align-items: center;
             margin-top: 10px;
         }
         .pricing-buttons-row button {
-            margin: 0 15px; /* Spacing between buttons */
+            margin: 0 15px; 
             background-color: #D32F2F; 
             color: white;
-            padding: 10px 20px; /* Slightly larger buttons */
+            padding: 10px 20px; 
             font-size: 1em; 
-            width: 200px; /* FIXED WIDTH for same size */
+            width: 200px; 
             flex-shrink: 0;
         }
         .or-text {
@@ -190,11 +204,29 @@
             color: #FFC107 !important; 
             font-size: 0.9em !important; 
             margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Bulk Converter Section (Inside Tab) */
+        .bulk-converter-pro {
+            width: 50%;
+            margin: 40px auto 0 auto;
+            text-align: center;
+            border: 1px dashed #3C3C3C;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .bulk-converter-pro p {
+             font-weight: bold; 
+             color: #4CAF50;
+        }
+        #bulk-convert-button {
+            margin-top: 15px;
         }
 
         /* Footer */
         footer { 
-            margin-top: 20px; 
+            margin-top: 40px; 
             width: 100%; 
             max-width: 1400px;
             text-align: center;
@@ -210,81 +242,109 @@
     <h1>DataXLator<span class="trademark">™</span></h1>
     <p class="subtitle">The universal single-file and bulk data converter.</p>
 
-    <div id="teams-button-container">
-        <a href="teams.html" style="width: 100%; text-decoration: none;">
-            <button id="teams-button" title="Upgrade to our B2B Teams plan">
-                For Teams & Enterprise
-            </button>
+    <div id="teams-link-container">
+        <a id="teams-link" href="teams.html" title="Upgrade to our B2B Teams plan">
+            For Teams & Enterprise
         </a>
     </div>
 
-    <div class="container">
-        <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
+    <div class="tab-container">
+        <button id="free-tab" class="tab-button active" onclick="openTab('free')">
+            Free Converter
+        </button>
+        <button id="pro-tab" class="tab-button" onclick="openTab('pro')">
+            Pro Features
+        </button>
+    </div>
 
-        <div class="controls-panel">
-            
-            <div class="format-selector-group">
-                <label for="input-format">Input Format:</label>
-                <select id="input-format">
-                    <option value="json">JSON</option>
-                    <option value="yaml">YAML</option>
-                    <option value="csv">CSV (PRO)</option>
-                </select>
+    <div id="tab-content" style="width: 95%; max-width: 1400px;">
+        
+        <div id="free" class="tab-content active">
+            <div class="free-converter-layout">
+                <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
+
+                <div class="controls-panel">
+                    <div class="format-selector-group">
+                        <label for="input-format">Input Format:</label>
+                        <select id="input-format">
+                            <option value="json">JSON</option>
+                            <option value="yaml">YAML</option>
+                            <option value="csv">CSV (PRO)</option>
+                        </select>
+                    </div>
+
+                    <div class="format-selector-group">
+                        <label for="output-format">Output Format:</label>
+                        <select id="output-format">
+                            <option value="yaml">YAML</option>
+                            <option value="json">JSON</option>
+                            <option value="sql">SQL INSERT (PRO)</option>
+                        </select>
+                    </div>
+
+                    <button id="execute-convert" title="Execute Single File Conversion">
+                        Convert Data
+                    </button>
+                </div>
+
+                <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
+            </div>
+        </div>
+
+        <div id="pro" class="tab-content">
+            <div class="pricing-section-pro">
+                <p>Unlock Pro Features:</p>
+                
+                <div class="pricing-buttons-row">
+                    <button id="monthly-pro-button"
+                            onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                            title="Start a recurring monthly subscription">
+                        Pro Monthly: $7/mo
+                    </button>
+                    <span class="or-text">OR</span>
+                    <button id="lifetime-pro-button"
+                            onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                            title="Get access forever with a single payment">
+                        Lifetime Access: $29
+                    </button>
+                </div>
+
+                <p class="urgent-text">Limited Time Introductory Offer!</p>
             </div>
 
-            <div class="format-selector-group">
-                <label for="output-format">Output Format:</label>
-                <select id="output-format">
-                    <option value="yaml">YAML</option>
-                    <option value="json">JSON</option>
-                    <option value="sql">SQL INSERT (PRO)</option>
-                </select>
-            </div>
-
-            <button id="execute-convert" title="Execute Single File Conversion">
-                Convert Data
-            </button>
-            
-            <div class="bulk-converter" style="border: none; padding-top: 0; margin-top: 5px;">
-                <p style="margin-bottom: 5px; font-weight: bold; color: #4CAF50;">PRO: Bulk ZIP Conversion</p>
+            <div class="bulk-converter-pro">
+                <p>PRO: Bulk ZIP Conversion</p>
                 <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
                 <button id="bulk-convert-button" title="Upload and convert multiple files">
                     Bulk Convert Files
                 </button>
                 <div id="bulk-message"></div>
             </div>
-
         </div>
-
-        <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
     </div>
-
-    <div class="pricing-section-bottom">
-        <p>Unlock Pro Features:</p>
-        
-        <div class="pricing-buttons-row">
-            <button id="monthly-pro-button"
-                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
-                    title="Start a recurring monthly subscription">
-                Pro Monthly: $7/mo
-            </button>
-            <span class="or-text">OR</span>
-            <button id="lifetime-pro-button"
-                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
-                    title="Get access forever with a single payment">
-                Lifetime Access: $29
-            </button>
-        </div>
-
-        <p class="urgent-text">Limited Time Introductory Offer!</p>
-    </div>
-
+    
     <footer>
         <p style="font-size: 0.8em; margin-top: 40px; color: #555;">
             Copyright &copy; 2025 DataXLator<span class="trademark">™</span>. <a href="LICENSE.md" style="color: #007ACC; text-decoration: none;">All rights reserved.</a>
         </p>
     </footer>
 
+    <script>
+        // Tab switching logic
+        function openTab(tabName) {
+            var i, tabContent, tabButton;
+            tabContent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabContent.length; i++) {
+                tabContent[i].classList.remove("active");
+            }
+            tabButton = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tabButton.length; i++) {
+                tabButton[i].classList.remove("active");
+            }
+            document.getElementById(tabName).classList.add("active");
+            document.getElementById(tabName + '-tab').classList.add("active");
+        }
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="app.js"></script>
 </body>

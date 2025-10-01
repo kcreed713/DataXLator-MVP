@@ -8,6 +8,8 @@ const outputData = document.getElementById('output-data');
 const executeConvertButton = document.getElementById('execute-convert');
 const swapButton = document.getElementById('swap-button');
 const directionDisplay = document.getElementById('direction-display');
+const inputFormat = document.getElementById('input-format');
+const outputFormat = document.getElementById('output-format');
 
 // Bulk Converter Elements
 const bulkFileInput = document.getElementById('bulk-file-input');
@@ -168,16 +170,19 @@ async function handleBulkConversion() {
     }
 }
 
-// --- 6. Event Listeners ---
+// --- 5. Event Listeners ---
 
 // Single-File Feature Listeners
-// Note: We REMOVE the redundant swapButton listener.
+// These are attached to the core elements in the "Free Converter" tab
 executeConvertButton.addEventListener('click', translateData);
 inputData.addEventListener('input', translateData);
 
-// CRITICAL FIX: The conversion should run whenever a format is selected.
+// CRITICAL FIX: Conversion should run whenever a format is selected.
+// NOTE: These variables must be defined in the app.js file (inputFormat, outputFormat)
+//const inputFormat = document.getElementById('input-format');
+//const outputFormat = document.getElementById('output-format');
 inputFormat.addEventListener('change', translateData);
 outputFormat.addEventListener('change', translateData);
 
-// Pro Feature Listener
+// Pro Feature Listener (inside the "Pro Features" tab)
 bulkConvertButton.addEventListener('click', handleBulkConversion);
