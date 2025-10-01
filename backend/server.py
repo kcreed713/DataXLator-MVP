@@ -1,210 +1,201 @@
-import io
+# DataXLator Backend API Server (Flask)
+# LIVE API Base URL: https://dataxlator-api.onrender.com
+# Handles PRO features: Bulk ZIP conversion, CSV-to-JSON, and JSON-to-SQL.
+
+import os
 import json
-import zipfile
 import yaml
-import csv # Built-in Python module for CSV handling
+import io
+import zipfile
+import csv
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS 
-from werkzeug.datastructures import FileStorage
-
-app = Flask(__name__)
-
-# Enable CORS for all routes (necessary for client-side JS on GitHub Pages to talk to localhost)
-# For production deployment, you would restrict this to your specific domain
-CORS(app) 
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
 
 # --- Configuration ---
-# Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
+app = Flask(__name__)
+# Enable CORS for all origins (*) to allow requests from the statically hosted frontend
+CORS(app)
 
-# --- Helper Functions for Conversion ---
+# --- Utility Functions ---
 
-def json_to_yaml(data_str):
-    """Converts a JSON string to a YAML string."""
-    data = json.loads(data_str)
-    # Using safe_dump ensures only standard Python objects are serialized
-    return yaml.safe_dump(data, default_flow_style=False)
+def convert_json_to_sql(json_data):
+    """Converts a list of JSON objects (records) into SQL INSERT statements."""
+    if not isinstance(json_data, list) or not json_data:
+        raise ValueError("Input must be a non-empty list of objects for SQL conversion.")
 
-def yaml_to_json(data_str):
-    """Converts a YAML string to a JSON string (formatted with 2 spaces)."""
-    # Use safe_load to prevent arbitrary code execution from malicious YAML
-    data = yaml.safe_load(data_str)
-    return json.dumps(data, indent=2)
+    # Assume all objects have the same keys for column names
+    columns = list(json_data[0].keys())
+    # Simple table name placeholder
+    table_name = "dataxlator_table" 
 
-def json_to_sql_insert(json_data_str, table_name="your_table"):
-    """Converts a JSON array of objects to SQL INSERT statements."""
-    data = json.loads(json_data_str)
-    
-    if not isinstance(data, list) or not data:
-        raise ValueError("JSON data must be a non-empty array of objects.")
-        
-    # Assuming all objects have the same keys (headers)
-    keys = list(data[0].keys())
-    
-    sql_statements = []
-    
-    # Start building the template for the INSERT statement
-    cols_str = ", ".join(f"`{k}`" for k in keys)
-    insert_template = f"INSERT INTO `{table_name}` ({cols_str}) VALUES "
-    
-    
-    for row in data:
+    # Prepare column list for the INSERT statement
+    column_list = ", ".join(f"`{col}`" for col in columns)
+
+    # Generate INSERT statements for each record
+    insert_statements = []
+    for record in json_data:
         values = []
-        for key in keys:
-            value = row.get(key)
-            if value is None:
-                values.append("NULL")
-            elif isinstance(value, (int, float)):
-                values.append(str(value))
-            else:
+        for col in columns:
+            value = record.get(col)
+            # Handle Python types and escape strings for SQL
+            if isinstance(value, str):
                 # Escape single quotes and wrap in single quotes for SQL string literal
-                safe_value = str(value).replace("'", "''")
-                values.append(f"'{safe_value}'")
-        
-        values_str = ", ".join(values)
-        sql_statements.append(f"{insert_template}({values_str});")
-        
-    return "\n".join(sql_statements)
+                values.append(f"'{value.replace("'", "''")}'")
+            elif value is None:
+                values.append("NULL")
+            else:
+                values.append(str(value)) # Numbers, booleans (as 0/1)
 
-
-def csv_to_json(csv_data_str):
-    """Converts a CSV string to a JSON array of objects."""
-    # Use StringIO to treat the string data like a file for the csv module
-    reader = csv.DictReader(io.StringIO(csv_data_str))
+        values_list = ", ".join(values)
+        sql = f"INSERT INTO {table_name} ({column_list}) VALUES ({values_list});"
+        insert_statements.append(sql)
     
-    # Read all rows into a list of dictionaries
-    data = list(reader)
-    
-    # Return the JSON string representation
-    return json.dumps(data, indent=2)
+    return "\n".join(insert_statements)
 
-# --- NEW: Single-Text PRO API Endpoints ---
+# --- Conversion Endpoints (PRO Features) ---
 
 @app.route('/convert/csv-to-json', methods=['POST'])
-def single_csv_to_json():
-    """API to convert CSV text input to JSON output."""
-    data = request.get_data(as_text=True)
-    if not data:
-        return jsonify({"error": "CSV input is empty."}), 400
+def csv_to_json_route():
+    """Converts CSV text payload to JSON array."""
     try:
-        json_output = csv_to_json(data)
-        return jsonify({"result": json_output})
+        data = request.get_json()
+        csv_text = data.get('data', '')
+        
+        if not csv_text:
+            return jsonify({"error": "No CSV data provided."}), 400
+
+        # Use StringIO to treat the string as a file
+        csvfile = io.StringIO(csv_text)
+        # Use DictReader to read each row as a dictionary
+        reader = csv.DictReader(csvfile)
+        
+        # Convert DictReader result to a list of dictionaries
+        json_array = list(reader)
+        
+        # Return pretty-printed JSON
+        return jsonify(json_array), 200
+
     except Exception as e:
-        return jsonify({"error": f"CSV Conversion Error: {str(e)}"}), 500
+        app.logger.error(f"CSV to JSON Conversion Error: {e}")
+        return jsonify({"error": f"Failed to convert CSV to JSON: {str(e)}"}), 500
+
 
 @app.route('/convert/json-to-sql', methods=['POST'])
-def single_json_to_sql():
-    """API to convert JSON array input to SQL INSERT statements."""
-    data = request.get_data(as_text=True)
-    if not data:
-        return jsonify({"error": "JSON input is empty."}), 400
-        
-    # NOTE: In a production app, you would prompt the user for the table name. 
-    # For MVP, we use a placeholder 'dataxlator_table'.
-    table_name = request.args.get('table_name', 'dataxlator_table')
-
+def json_to_sql_route():
+    """Converts JSON array payload to SQL INSERT statements."""
     try:
-        sql_output = json_to_sql_insert(data, table_name=table_name)
-        return jsonify({"result": sql_output})
-    except ValueError as e:
-        return jsonify({"error": f"JSON Input Error: {str(e)}"}), 400
-    except Exception as e:
-        return jsonify({"error": f"SQL Generation Error: {str(e)}"}), 500
+        data = request.get_json()
+        json_text = data.get('data', '')
+        
+        if not json_text:
+            return jsonify({"error": "No JSON data provided."}), 400
 
-# --- Core Bulk API Endpoint ---
+        # Attempt to parse the JSON input
+        try:
+            json_data = json.loads(json_text)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid JSON format provided."}), 400
+
+        # Perform the conversion logic
+        sql_statements = convert_json_to_sql(json_data)
+        
+        # Return the generated SQL as plain text
+        return sql_statements, 200, {'Content-Type': 'text/plain'}
+
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        app.logger.error(f"JSON to SQL Conversion Error: {e}")
+        return jsonify({"error": f"Failed to convert JSON to SQL: {str(e)}"}), 500
+
 
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
-    """
-    Handles the zip file upload, processes all files inside, and returns a converted zip.
-    """
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-    # [Rest of bulk_convert function remains unchanged]
-
-    file: FileStorage = request.files['file']
-    
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    # Ensure the uploaded file is a zip
-    if not file.filename.endswith('.zip'):
-        return jsonify({"error": "Only ZIP files are supported for bulk conversion"}), 400
-
-    # Create in-memory buffer for the output ZIP file
-    output_zip_buffer = io.BytesIO()
-
+    """Handles bulk conversion of files within a ZIP archive. Fully in-memory."""
     try:
-        # Read the input ZIP file into an in-memory buffer
-        input_zip_buffer = io.BytesIO(file.read())
+        # 1. Check for the file key (MUST be 'file' as per app.js)
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request. Ensure the field name is 'file'."}), 400
         
-        # Open the input ZIP and output ZIP files
-        with zipfile.ZipFile(input_zip_buffer, 'r') as input_zip, \
-             zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as output_zip:
+        uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({"error": "No file selected."}), 400
 
-            file_count = 0
-            for filename in input_zip.namelist():
-                # Skip directories and non-config files
-                if filename.endswith('/') or not (filename.endswith('.json') or filename.endswith('.yaml') or filename.endswith('.yml')):
-                    continue
+        # 2. Read the uploaded ZIP into memory
+        input_zip_bytes = io.BytesIO(uploaded_file.read())
+        
+        # 3. Create the output ZIP file in memory
+        output_zip_bytes = io.BytesIO()
+        
+        with zipfile.ZipFile(input_zip_bytes, 'r') as input_zip:
+            with zipfile.ZipFile(output_zip_bytes, 'w', zipfile.ZIP_DEFLATED) as output_zip:
                 
-                file_count += 1
+                conversion_results = []
                 
-                # 1. Read the file content
-                with input_zip.open(filename) as source_file:
-                    content_bytes = source_file.read()
-                    content_str = content_bytes.decode('utf-8')
-                
-                converted_content = None
-                new_filename = filename
-                
-                # 2. Determine conversion direction and execute
-                try:
-                    if filename.endswith('.json'):
-                        # JSON -> YAML
-                        converted_content = json_to_yaml(content_str)
-                        new_filename = filename.replace('.json', '.yaml')
+                for member in input_zip.infolist():
+                    if member.is_dir():
+                        continue
                         
-                    elif filename.endswith(('.yaml', '.yml')):
-                        # YAML -> JSON
-                        converted_content = yaml_to_json(content_str)
-                        # Ensure we convert .yaml or .yml to .json
-                        if filename.endswith('.yml'):
-                            new_filename = filename.replace('.yml', '.json')
-                        else:
-                            new_filename = filename.replace('.yaml', '.json')
-                            
-                except Exception as e:
-                    # Write an error file instead of crashing the batch
-                    error_message = f"ERROR converting {filename}: {str(e)}"
-                    print(error_message)
-                    new_filename = f"{filename}_ERROR.txt"
-                    converted_content = error_message
+                    filename = member.filename
                     
-                # 3. Write the converted or error content to the output ZIP
-                if converted_content:
-                    output_zip.writestr(new_filename, converted_content.encode('utf-8'))
+                    try:
+                        # Read content as text
+                        with input_zip.open(member, 'r') as file:
+                            content_bytes = file.read()
+                            # Assume UTF-8 encoding for config files
+                            content = content_bytes.decode('utf-8')
 
-            if file_count == 0:
-                return jsonify({"error": "ZIP file contained no recognizable JSON or YAML files (.json, .yaml, .yml)"}), 400
+                        converted_content = None
+                        output_filename = filename
 
-        # Prepare buffer for response
-        output_zip_buffer.seek(0)
+                        if filename.endswith(('.json', '.JSON')):
+                            # JSON to YAML conversion
+                            data = json.loads(content)
+                            converted_content = yaml.dump(data, sort_keys=False)
+                            output_filename = filename.rsplit('.', 1)[0] + '.yaml'
+                            conversion_results.append(f"Converted: {filename} -> {output_filename}")
+
+                        elif filename.endswith(('.yaml', '.yml', '.YAML', '.YML')):
+                            # YAML to JSON conversion
+                            data = yaml.safe_load(content)
+                            converted_content = json.dumps(data, indent=2)
+                            output_filename = filename.rsplit('.', 1)[0] + '.json'
+                            conversion_results.append(f"Converted: {filename} -> {output_filename}")
+                            
+                        # If conversion happened, write to the output ZIP
+                        if converted_content is not None:
+                            output_zip.writestr(output_filename, converted_content)
+                        else:
+                            # If not converted (e.g., it was an image or unsupported file), copy it over
+                            output_zip.writestr(filename, content_bytes)
+
+
+                    except Exception as conversion_error:
+                        error_message = f"ERROR converting {filename}: {str(conversion_error)}"
+                        # Log error internally
+                        app.logger.error(error_message)
+                        # Add an error file to the ZIP for the user
+                        output_zip.writestr(f"ERROR_{filename}.txt", error_message)
+                        conversion_results.append(f"Failed: {filename}")
+
+
+        # 4. Prepare the in-memory ZIP for sending
+        output_zip_bytes.seek(0)
         
-        # 4. Send the new ZIP file back to the client
+        # 5. Send the file back to the client
         return send_file(
-            output_zip_buffer,
+            output_zip_bytes,
             mimetype='application/zip',
             as_attachment=True,
             download_name='dataxlator_converted_files.zip'
         )
 
-    except zipfile.BadZipFile:
-        return jsonify({"error": "The uploaded file is not a valid ZIP archive."}), 400
     except Exception as e:
-        print(f"Server-side error during bulk conversion: {e}")
-        return jsonify({"error": "An internal server error occurred during processing."}), 500
+        # Catch any high-level errors (e.g., zip corruption, memory issue)
+        app.logger.error(f"Critical Bulk Conversion Failure: {e}")
+        return jsonify({"error": f"Critical server error during bulk conversion: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    # Use for local testing only
+    # When running locally (for development)
     app.run(debug=True, port=5000)
