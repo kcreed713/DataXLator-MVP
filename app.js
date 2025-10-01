@@ -2,6 +2,10 @@
 
 // --- Configuration ---
 // LIVE PRODUCTION API URL (Render Service)
+// Current endpoints:
+// Bulk Converter: API_BASE_URL + '/bulk-convert'
+// CSV to JSON (PRO): API_BASE_URL + '/convert/csv-to-json'
+// JSON to SQL (PRO): API_BASE_URL + '/convert/json-to-sql'
 const API_BASE_URL = 'https://dataxlator-api.onrender.com';
 
 // --- 1. DOM Element Selection ---
@@ -19,7 +23,8 @@ const bulkMessage = document.getElementById('bulk-message');
 // --- 2. Analytics Tracking ---
 function trackEvent(eventName, properties = {}) {
     // --- ANALYTICS DECISION POINT ---
-    // For launch, we are using console.log. Replace with your preferred SDK later.
+    // For launch, we are using console.log.
+    // Replace this with your preferred SDK (GA4, PostHog, etc.) later.
     console.log(`[XLATOR_EVENT] ${eventName}`, properties);
 }
 
@@ -62,7 +67,7 @@ async function translateData() {
 
     // 1. Determine Conversion Type and Endpoint
     if (fromFormat === 'JSON' && toFormat === 'YAML') {
-        // Client-side: JSON -> YAML (Requires jsyaml library from index.html)
+        // Client-side: JSON -> YAML
         try {
             const data = JSON.parse(input);
             convertedResult = jsyaml.dump(data, { indent: 2, sortKeys: false });
@@ -70,7 +75,7 @@ async function translateData() {
             convertedResult = `❌ JSON Parsing Error: ${e.message}`;
         }
     } else if (fromFormat === 'YAML' && toFormat === 'JSON') {
-        // Client-side: YAML -> JSON (Requires jsyaml library from index.html)
+        // Client-side: YAML -> JSON
         try {
             const data = jsyaml.load(input);
             convertedResult = JSON.stringify(data, null, 2);
@@ -85,9 +90,26 @@ async function translateData() {
         } else if (conversionType === 'JSON_to_SQL') {
             apiEndpoint = '/convert/json-to-sql';
             trackEvent('PRO_Conversion_Attempt', { type: conversionType });
-        } else {
-            // All other complex conversions are currently unsupported in MVP
+        } else if (conversionType === 'JSON_to_CSV') {
+            // NOTE: While possible, let's keep it simple (JSON -> SQL/YAML, CSV -> JSON)
+            // For now, these paths result in a blocked message.
             convertedResult = `❌ Pro Feature: Conversion ${conversionType} not supported yet.`;
+        } else if (conversionType === 'SQL_to_JSON') {
+            // SQL parsing is complex. Blocked for MVP.
+            convertedResult = `❌ Pro Feature: SQL parsing is not supported in the MVP.`;
+        } else if (conversionType === 'YAML_to_CSV') {
+            // Blocked for MVP.
+             convertedResult = `❌ Pro Feature: Conversion ${conversionType} not supported yet.`;
+        } else if (conversionType === 'CSV_to_YAML') {
+            // Blocked for MVP.
+             convertedResult = `❌ Pro Feature: Conversion ${conversionType} not supported yet.`;
+        } else if (conversionType === 'YAML_to_SQL') {
+            // Blocked for MVP.
+             convertedResult = `❌ Pro Feature: Conversion ${conversionType} not supported yet.
+            (Tip: Convert YAML to JSON first, then JSON to SQL.)`;
+        } else if (conversionType === 'SQL_to_YAML') {
+            // Blocked for MVP.
+             convertedResult = `❌ Pro Feature: Conversion ${conversionType} not supported yet.`;
         }
 
 
@@ -172,7 +194,6 @@ async function bulkConvert() {
             const errorText = await response.text();
             let errorMessage = `Server returned status ${response.status}.`;
             try {
-                // Try to parse the error message if the server sent JSON
                 const errorJson = JSON.parse(errorText);
                 errorMessage = errorJson.error || errorMessage;
             } catch (e) {
