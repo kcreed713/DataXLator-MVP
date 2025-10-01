@@ -32,7 +32,7 @@
             flex-grow: 1;
         }
         
-        /* Text Areas (Code Input/Output) */
+        /* Text Areas (Code Input/Output) - SLIGHTLY NARROWED */
         textarea { 
             flex: 1; 
             min-height: 400px; 
@@ -61,7 +61,6 @@
             background-color: #252525;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            /* Removed flex-based ordering inside the panel to rely on simpler document flow */
         }
         
         /* Buttons - General Styling */
@@ -84,7 +83,7 @@
         #execute-convert {
             background-color: #007ACC; 
             color: white;
-            margin-top: 5px; /* Tighter spacing */
+            margin-top: 5px;
             margin-bottom: 15px;
         }
         #execute-convert:hover { background-color: #005A9C; } 
@@ -117,7 +116,7 @@
             width: 100%;
             border-top: 1px solid #3C3C3C;
             padding-top: 15px;
-            margin-top: 10px; /* Tighter spacing */
+            margin-top: 10px; 
             text-align: center;
         }
         #bulk-message {
@@ -144,47 +143,50 @@
             background-color: #4CAF50; 
             color: white;
             padding: 10px 20px;
-            width: auto; /* Allow button to size to content */
+            width: auto; 
             min-width: 200px;
             font-size: 1em;
         }
         #teams-button:hover { background-color: #388E3C; }
 
-        /* Pricing/Pro Section (TOP LEFT CORNER) */
+        /* Pricing/Pro Section (TOP LEFT CORNER - SMALLER/TIGHTER) */
         .pricing-section-fixed {
-            position: absolute;
-            top: 100px; /* Below the main title area */
+            position: fixed; /* Fixed position so it stays put */
+            top: 25px; /* Aligns with the Teams button */
             left: 20px;
             z-index: 99;
             background-color: #252525;
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            width: 280px;
+            width: 200px; /* FIXED WIDTH to make it compact */
             text-align: center;
+            /* Ensures it stays above the text area without overlap */
+            /* We will ensure the body padding/container margin keeps it away from the input area */
         }
         .pricing-section-fixed p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
-            font-size: 1.1em;
+            font-size: 1em; /* Slightly smaller font */
         }
         .pricing-section-fixed button {
-            margin-top: 10px;
+            margin-top: 8px; /* Tighter button spacing */
             background-color: #D32F2F; 
             color: white;
-            padding: 12px 15px;
-            font-size: 1em;
+            padding: 8px 10px; /* Smaller button padding */
+            font-size: 0.9em; /* Smaller button font */
+            width: 100%;
         }
         .pricing-section-fixed button:hover { background-color: #B71C1C; }
         .urgent-text {
             color: #FFC107 !important; 
-            font-size: 0.9em !important;
+            font-size: 0.8em !important; /* Smallest font for urgency */
         }
 
         /* Footer */
         footer { 
-            margin-top: 20px; /* Reduced margin for space efficiency */
+            margin-top: 20px; 
             width: 100%; 
             max-width: 1400px;
             text-align: center;
@@ -216,7 +218,7 @@
             Pro Monthly: $7/mo
         </button>
         
-        <p style="margin: 15px 0 5px 0;">OR</p>
+        <p style="margin: 10px 0 5px 0; font-size: 0.8em;">OR</p>
 
         <button id="lifetime-pro-button"
                 onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
