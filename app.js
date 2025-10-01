@@ -1,7 +1,6 @@
 // --- Configuration ---
-
 // IMPORTANT: This URL has been updated to your Render deployment.
-const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert'; 
 
 // --- 1. DOM Element Selection ---
 const inputData = document.getElementById('input-data');
@@ -34,10 +33,10 @@ function toggleDirection() {
         inputData.placeholder = 'Paste JSON data here...';
     }
     outputData.value = '';
-
     outputData.classList.remove('error');
     bulkMessage.textContent = ''; // Clear bulk message on direction change
 }
+
 
 // --- 3. Analytics Tracking (Placeholder) ---
 
@@ -58,17 +57,25 @@ function translateData() {
         outputData.value = '';
         return;
     }
+    
+    // Check if input looks like a format that requires Pro (SQL/CSV)
+    if (data.includes('INSERT INTO') || (conversionDirection === 'json-to-yaml' && data.includes(';'))) {
+        outputData.value = 'SQL conversion requires the PRO Bulk Converter API for advanced database formatting.';
+        outputData.classList.add('error');
+        return;
+    }
+    if (data.includes(',') && data.includes('\n') && !data.includes('{')) {
+        outputData.value = 'CSV conversion requires the PRO Bulk Converter API for header mapping and data structure validation.';
+        outputData.classList.add('error');
+        return;
+    }
 
     try {
-
         // Since we import js-yaml in index.html, we use it here for the free tier.
-        // Since the free conversion is done purely in the browser, we use built-in functions
         if (conversionDirection === 'json-to-yaml') {
             const jsonObject = JSON.parse(data);
-            // FIX: Using jsyaml.dump() for actual JSON -> YAML conversion
             outputData.value = jsyaml.dump(jsonObject); 
         } else { // yaml-to-json
-            // FIX: Using jsyaml.load() for actual YAML -> JSON conversion
             const yamlObject = jsyaml.load(data);
             outputData.value = JSON.stringify(yamlObject, null, 2);
         }
@@ -96,14 +103,6 @@ async function handleBulkConversion() {
         bulkMessage.textContent = 'Only one ZIP file can be uploaded at a time.';
         return;
     }
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-        bulkMessage.textContent = '❌ Only ZIP files are supported for bulk conversion.';
-        return;
-    }
-    
-    // In a real application, you would add a check here for subscription status.
-    // For now, we assume the user is Pro to test the feature.
-
 
     const zipFile = files[0];
     const formData = new FormData();
@@ -117,15 +116,12 @@ async function handleBulkConversion() {
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
     
     try {
-        // 3. Send Request to Flask Backend
         const response = await fetch(BULK_API_URL, {
             method: 'POST',
             body: formData,
-            // CORS Note: Flask server must be configured to allow CORS from your GitHub Pages domain.
         });
 
         if (response.ok) {
-
             // 1. Get the converted file as a Blob
             const blob = await response.blob();
 
@@ -179,5 +175,5 @@ swapButton.addEventListener('click', toggleDirection);
 executeConvertButton.addEventListener('click', translateData);
 inputData.addEventListener('input', translateData);
 
-// Pro Feature Listener
+// Pro Feature Listener (CRITICAL FIX HERE)
 bulkConvertButton.addEventListener('click', handleBulkConversion);
