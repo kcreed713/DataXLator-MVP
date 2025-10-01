@@ -2,231 +2,262 @@
 // LIVE PRODUCTION API URL (Render Service)
 // Current endpoints:
 // Bulk Converter: API_BASE_URL + '/bulk-convert'
-// CSV to JSON (PRO): API_BASE_URL + '/csv-to-json'
-// JSON to SQL (PRO): API_BASE_URL + '/json-to-sql'
+// CSV to JSON (PRO): API_BASE_URL + '/convert/csv-to-json'
+// JSON to SQL (PRO): API_BASE_URL + '/convert/json-to-sql'
 const API_BASE_URL = 'https://dataxlator-api.onrender.com'; 
 
 // --- 1. DOM Element Selection ---
-// Core Text Areas and Display
 const inputData = document.getElementById('input-data');
 const outputData = document.getElementById('output-data');
-const directionDisplay = document.getElementById('direction-display');
-
-// New Selectors for Conversion Direction and Execution
-const inputFormatSelect = document.getElementById('input-format-select');
-const outputFormatSelect = document.getElementById('output-format-select');
 const executeConvertButton = document.getElementById('execute-convert');
 
-// Bulk Converter Elements (PRO Feature)
+// New Selectors for Conversion Direction
+const inputFormatSelect = document.getElementById('input-format-select');
+const outputFormatSelect = document.getElementById('output-format-select');
+const directionDisplay = document.getElementById('direction-display');
+
+// Bulk Converter Elements
 const bulkFileInput = document.getElementById('bulk-file-input');
 const bulkConvertButton = document.getElementById('bulk-convert-button');
 const bulkMessage = document.getElementById('bulk-message');
 
-// --- ANALYTICS FUNCTION ---
-// A simple function to log important user actions to the console, 
-// mimicking sending data to an analytics service like Google Analytics or PostHog.
-function trackEvent(eventName, properties = {}) {
-    console.log(`[ANALYTICS] Event: ${eventName}`, properties);
-}
+// Internal state to track the conversion direction
+let inputFormat = 'JSON';
+let outputFormat = 'YAML';
 
-// --- CORE CONVERSION LOGIC ---
+// --- 2. State Management (Update Direction) ---
 
 /**
- * Updates the direction display text based on the selected formats.
- * Also toggles the 'Convert' button to indicate PRO (server-side) vs. Free (client-side) features.
- * @param {string} inputFormat 
- * @param {string} outputFormat 
+ * Updates the conversion direction based on user selection in the dropdowns.
  */
-function updateDirection(inputFormat, outputFormat) {
-    directionDisplay.textContent = `${inputFormat} ➡️ ${outputFormat}`;
+function updateDirection() {
+    inputFormat = inputFormatSelect.value;
+    outputFormat = outputFormatSelect.value;
     
-    // Check if the current conversion requires a server call (PRO feature)
-    const isProFeature = 
-        inputFormat === 'CSV' || 
-        outputFormat === 'SQL' || 
-        (inputFormat !== 'JSON' && inputFormat !== 'YAML') || 
-        (outputFormat !== 'JSON' && outputFormat !== 'YAML');
+    // Update the visual arrow display
+    directionDisplay.textContent = `${inputFormat} ➡️ ${outputFormat}`;
 
-    if (isProFeature) {
-        // Change button color/text to indicate PRO/Server action
-        executeConvertButton.textContent = 'Convert (PRO)';
-        executeConvertButton.classList.remove('bg-green-600', 'hover:bg-green-700');
-        executeConvertButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
-    } else {
-        // Standard client-side conversion
-        executeConvertButton.textContent = 'Convert';
-        executeConvertButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
-        executeConvertButton.classList.add('bg-green-600', 'hover:bg-green-700');
+    // Update input placeholder text
+    inputData.placeholder = `Paste ${inputFormat} data here...`;
+
+    // Clear output and messages when direction changes
+    outputData.value = '';
+    outputData.placeholder = `Conversion set to ${inputFormat} ➡️ ${outputFormat}. Click Convert or paste data.`;
+    bulkMessage.textContent = ''; 
+
+    // The user must click the dedicated Convert button for server-side processing,
+    // so we disable input listening for non-JSON/YAML free features.
+    inputData.removeEventListener('input', translateData);
+    if (isClientSideConversion(inputFormat, outputFormat)) {
+        inputData.addEventListener('input', translateData);
     }
 }
 
 /**
- * Handles all single-text conversion requests (both client-side and server-side PRO).
+ * Checks if the current conversion direction can be handled client-side (JSON ↔ YAML).
+ */
+function isClientSideConversion(inputFmt, outputFmt) {
+    return (inputFmt === 'JSON' && outputFmt === 'YAML') || 
+           (inputFmt === 'YAML' && outputFmt === 'JSON');
+}
+
+/**
+ * Determines if the selected conversion is a PRO feature.
+ */
+function isProFeature(inputFmt, outputFmt) {
+    // YAML ↔ JSON is free (client-side)
+    if (isClientSideConversion(inputFmt, outputFmt)) return false;
+    
+    // All other defined conversions (CSV ↔ JSON, JSON ↔ SQL) are PRO (server-side)
+    if (inputFmt === 'CSV' && outputFmt === 'JSON') return true;
+    if (inputFmt === 'JSON' && outputFmt === 'SQL') return true;
+    
+    // Any other combination is currently unsupported
+    return false;
+}
+
+// --- 3. Core Conversion Functionality (Handles both Free and PRO) ---
+
+/**
+ * Executes the conversion based on the current direction, using client-side or API.
  */
 async function translateData() {
-    outputData.value = 'Processing...';
-    const inputFormat = inputFormatSelect.value;
-    const outputFormat = outputFormatSelect.value;
-    const inputContent = inputData.value.trim();
-
-    if (!inputContent) {
-        outputData.value = '❌ Error: Input cannot be empty.';
+    const input = inputData.value.trim();
+    outputData.value = ''; 
+    
+    if (!input) {
+        outputData.placeholder = 'Input is empty. Please paste data to begin translation.';
         return;
     }
 
-    // Check for client-side JSON <-> YAML conversion (FREE)
-    if ((inputFormat === 'JSON' && outputFormat === 'YAML') || (inputFormat === 'YAML' && outputFormat === 'JSON')) {
-        // --- CLIENT-SIDE JSON/YAML CONVERSION (FREE) ---
+    if (isClientSideConversion(inputFormat, outputFormat)) {
+        // --- FREE: Client-Side Conversion (JSON ↔ YAML) ---
         try {
-            // Use js-yaml library (loaded via CDN in index.html)
-            const dataObject = inputFormat === 'JSON' ? JSON.parse(inputContent) : jsyaml.load(inputContent);
-            let result;
-            if (outputFormat === 'JSON') {
-                result = JSON.stringify(dataObject, null, 2);
-            } else { // outputFormat === 'YAML'
-                result = jsyaml.dump(dataObject);
+            let data;
+            let output;
+            if (inputFormat === 'JSON') {
+                data = JSON.parse(input);
+                output = jsyaml.dump(data, { noCompatMode: true }); // jsyaml from CDN
+            } else {
+                data = jsyaml.load(input);
+                output = JSON.stringify(data, null, 2);
             }
-            outputData.value = result;
-        } catch (error) {
-            outputData.value = `❌ Conversion Error: ${error.message}`;
+            outputData.value = output;
+
+        } catch (e) {
+            outputData.value = `❌ ERROR in parsing ${inputFormat}:\n\n${e.message}\n\nPlease check your input syntax carefully.`;
+            console.error('DataXLator Translation Error:', e);
         }
-    } else {
-        // --- SERVER-SIDE CONVERSION (PRO FEATURES: CSV/SQL) ---
+    
+    } else if (isProFeature(inputFormat, outputFormat)) {
+        // --- PRO: Server-Side API Conversion (CSV, SQL) ---
         
-        // ANALYTICS: Track attempt to use a paid feature
-        trackEvent('PRO_Conversion_Attempt', { 
-            input: inputFormat, 
-            output: outputFormat 
-        });
+        // In a real application, you would add a check here for subscription status.
 
-        let endpoint = '';
+        outputData.placeholder = '🔄 Converting via PRO API...';
+        executeConvertButton.disabled = true;
+
+        let apiUrl = '';
         if (inputFormat === 'CSV' && outputFormat === 'JSON') {
-            endpoint = '/csv-to-json';
+            apiUrl = API_BASE_URL + '/convert/csv-to-json';
         } else if (inputFormat === 'JSON' && outputFormat === 'SQL') {
-            endpoint = '/json-to-sql';
-        } else {
-            outputData.value = '❌ Error: Invalid or unsupported conversion path.';
-            return;
+            apiUrl = API_BASE_URL + '/convert/json-to-sql';
         }
-
+        
         try {
-            const response = await fetch(API_BASE_URL + endpoint, {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: inputContent })
+                headers: { 'Content-Type': 'text/plain' },
+                body: input
             });
+            
+            if (response.ok) {
+                const result = await response.json();
+                outputData.value = result.result; // Expects { "result": "..." }
+                outputData.placeholder = '✅ Conversion Complete.';
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`API Error (${response.status}): ${errorText.substring(0, 100)}...`);
+            } else {
+                const errorResult = await response.json();
+                outputData.value = `❌ API Error (${response.status}): ${errorResult.error || 'Unknown server error'}`;
             }
 
-            const resultJson = await response.json();
-            // Server should return 'converted_data' field
-            outputData.value = resultJson.converted_data || JSON.stringify(resultJson, null, 2);
-
         } catch (error) {
-            outputData.value = `❌ Server Error: Could not complete conversion. ${error.message}`;
+            console.error('API Fetch Error:', error);
+            outputData.value = `❌ Network Error: Could not connect to API at ${API_BASE_URL}.`;
+        } finally {
+            executeConvertButton.disabled = false;
         }
+
+    } else {
+        // Unsupported or invalid conversion path
+        outputData.value = `⚠️ Conversion ${inputFormat} ➡️ ${outputFormat} is not currently supported.`;
     }
 }
 
-// --- BULK CONVERTER LOGIC (PRO) ---
+// --- 4. Bulk Conversion Functionality (PRO Feature Integration) ---
 
-async function bulkConvert() {
+/**
+ * Sends the ZIP file to the Python backend for bulk conversion and handles the resulting download.
+ */
+async function handleBulkConversion() {
     const file = bulkFileInput.files[0];
+
+    // 1. Basic Validation
+    
     if (!file) {
-        bulkMessage.textContent = 'Please select a ZIP file first.';
+        bulkMessage.textContent = '❌ Please select a ZIP file.';
+        return;
+    }
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+        bulkMessage.textContent = '❌ Only ZIP files are supported for bulk conversion.';
         return;
     }
     
-    // ANALYTICS: Track Bulk Converter usage attempt
-    trackEvent('PRO_Bulk_Conversion_Attempt', { 
-        file_name: file.name 
-    });
+    // In a real application, you would add a check here for subscription status.
 
-    bulkMessage.textContent = 'Uploading and Converting... This may take a moment.';
+    bulkMessage.textContent = '🔄 Uploading and converting...';
+    bulkConvertButton.disabled = true;
+
+    // 2. Prepare Form Data
     const formData = new FormData();
-    formData.append('zip_file', file);
+    formData.append('file', file);
+    
+    const apiUrl = API_BASE_URL + '/bulk-convert';
 
     try {
-        // Send ZIP file to the live Render API
-        const response = await fetch(API_BASE_URL + '/bulk-convert', {
+        // 3. Send Request to Flask Backend
+        const response = await fetch(apiUrl, {
             method: 'POST',
-            body: formData 
+            body: formData,
+            // CORS must be enabled on the server (it is, using flask-cors)
         });
 
-        if (!response.ok) {
-            throw new Error('Server returned an error during bulk conversion.');
+        if (response.ok) {
+            // 4. Handle Successful ZIP Download
+            bulkMessage.textContent = '✅ Conversion Complete! Starting download...';
+            
+            // Extract the filename from the server's response header
+            let filename = 'dataxlator_converted_files.zip';
+            const disposition = response.headers.get('Content-Disposition');
+            if (disposition && disposition.indexOf('attachment') !== -1) {
+                const matches = /filename="?([^"]*)"?/.exec(disposition);
+                if (matches != null && matches[1]) filename = matches[1];
+            }
+            
+            // Convert response stream to a Blob
+            const blob = await response.blob();
+            
+            // Create a temporary link element to trigger the download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename; // Use the filename from the server
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            // 5. Cleanup
+            bulkMessage.textContent = 'Download started successfully!';
+            bulkFileInput.value = null; // Clear file input
+
+        } else {
+            // 6. Handle API Errors (e.g., file too large, zero valid files)
+            const errorText = await response.text();
+            let errorMessage = `API Error (${response.status}): ${errorText}`;
+            
+            try {
+                // Try to parse JSON error from Python server
+                const errorJson = JSON.parse(errorText);
+                errorMessage = `API Error: ${errorJson.error || 'Unknown Server Error'}`;
+            } catch (e) {
+                // Keep the raw text if parsing fails
+            }
+
+            bulkMessage.textContent = `❌ ${errorMessage}`;
         }
 
-        // Handle the ZIP response
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'dataxlator_converted_files.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        
-        bulkMessage.textContent = '✅ Success! Converted ZIP downloaded.';
-        
-        // ANALYTICS: Track successful paid feature use
-        trackEvent('PRO_Bulk_Conversion_Success');
-
     } catch (error) {
-        bulkMessage.textContent = `❌ Conversion failed. Check API status. Error: ${error.message}`;
+        // 7. Handle Network or CORS Errors
+        console.error('Network or Fetch Error:', error);
+        bulkMessage.textContent = `❌ Connection Error. Check the API_BASE_URL and server status.`;
+    } finally {
+        bulkConvertButton.disabled = false;
+        // Re-enable input if needed, but keeping file input clear is usually better UX
     }
 }
 
+// --- 5. Event Listeners ---
 
-// --- EVENT LISTENERS ---
+// Conversion Direction Listeners
+inputFormatSelect.addEventListener('change', updateDirection);
+outputFormatSelect.addEventListener('change', updateDirection);
 
-// Listener for conversion selectors and input
-inputFormatSelect.addEventListener('change', () => {
-    updateDirection(inputFormatSelect.value, outputFormatSelect.value);
-});
-outputFormatSelect.addEventListener('change', () => {
-    updateDirection(inputFormatSelect.value, outputFormatSelect.value);
-});
-inputData.addEventListener('input', () => {
-    // If it's a client-side conversion (JSON/YAML), run it live on input change
-    const inputFormat = inputFormatSelect.value;
-    const outputFormat = outputFormatSelect.value;
-    if ((inputFormat === 'JSON' && outputFormat === 'YAML') || (inputFormat === 'YAML' && outputFormat === 'JSON')) {
-        translateData();
-    }
-});
-
-// Listener for server-side Convert button
+// Core Conversion Listener (Only triggered by button click for PRO features)
 executeConvertButton.addEventListener('click', translateData);
 
-// Listener for Bulk Converter button
-bulkConvertButton.addEventListener('click', bulkConvert);
+// Bulk Feature Listener
+bulkConvertButton.addEventListener('click', handleBulkConversion);
 
-// Initial state setup on load
-updateDirection(inputFormatSelect.value, outputFormatSelect.value);
-
-
-// --- MONETIZATION ANALYTICS TRACKING ---
-
-// Track clicks on all upgrade buttons by looking for the Stripe URL prefix
-document.querySelectorAll('a[href*="buy.stripe.com"]').forEach(link => {
-    link.addEventListener('click', (e) => {
-        const url = e.currentTarget.href;
-        let tier = 'Unknown';
-        // Check specific payment links for tier identification
-        if (url.includes('bJefZ95ax6nn5XBfUa0Ny00')) {
-            tier = 'Pro_Monthly_$7';
-        } else if (url.includes('fZu9AL32p8vv0DhfUa0Ny01')) {
-            tier = 'Pro_Lifetime_$29';
-        } else if (url.includes('9B6eV56eBaDD99N0Zg0Ny02')) {
-            tier = 'Pro_Teams_$19_Monthly';
-        }
-        
-        // ANALYTICS: Track the click on the monetization link
-        trackEvent('CTA_Click_Upgrade_Button', { tier: tier });
-    });
-});
+// Initialize the correct direction logic on load
+updateDirection();
