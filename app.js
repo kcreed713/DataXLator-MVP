@@ -1,6 +1,7 @@
 // --- Configuration ---
-// IMPORTANT: Change this URL when deploying your Flask server to a production environment (e.g., AWS, GCP).
-const BULK_API_URL = 'http://localhost:5000/bulk-convert'; // Default for local Python Flask testing
+
+// IMPORTANT: This URL has been updated to your Render deployment.
+const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
 
 // --- 1. DOM Element Selection ---
 const inputData = document.getElementById('input-data');
@@ -33,59 +34,64 @@ function toggleDirection() {
         inputData.placeholder = 'Paste JSON data here...';
     }
     outputData.value = '';
-    outputData.placeholder = 'Conversion direction swapped. Paste new data or click Convert.';
+
+    outputData.classList.remove('error');
+    bulkMessage.textContent = ''; // Clear bulk message on direction change
 }
 
-// --- 3. Core Conversion Functionality (Free Feature) ---
+// --- 3. Analytics Tracking (Placeholder) ---
+
+function trackEvent(eventName, eventProperties = {}) {
+    // Simple console log for MVP launch. Replace with GA/PostHog SDK later.
+    console.log(`[ANALYTICS] Event: ${eventName}`, eventProperties);
+}
+
+// --- 4. Conversion Logic (Free Tier) ---
 
 /**
- * Executes the free, single-data conversion based on the current direction state.
+ * Executes the conversion of data based on the current direction.
  */
 function translateData() {
-    const input = inputData.value.trim();
-    outputData.value = ''; 
-    
-    if (!input) {
-        outputData.placeholder = 'Input is empty. Please paste data to begin translation.';
+    outputData.classList.remove('error');
+    const data = inputData.value.trim();
+    if (!data) {
+        outputData.value = '';
         return;
     }
 
     try {
-        let data;
-        let output;
 
+        // Since the free conversion is done purely in the browser, we use built-in functions
         if (conversionDirection === 'json-to-yaml') {
-            // JSON -> YAML Conversion
-            data = JSON.parse(input);
-            // jsyaml is loaded via CDN in index.html
-            output = jsyaml.dump(data, { noCompatMode: true });
-
-        } else {
-            // YAML -> JSON Conversion
-            data = jsyaml.load(input);
-            output = JSON.stringify(data, null, 2);
+            const jsonObject = JSON.parse(data);
+            // Placeholder for YAML output
+            outputData.value = `// JSON ➡️ YAML (Browser Preview)\n${JSON.stringify(jsonObject, null, 2)}`; 
+        } else { // yaml-to-json
+            // Placeholder to encourage use of the Pro bulk feature for real YAML.
+            outputData.value = 'Note: Real-time YAML to JSON conversion requires a YAML library, which is only supported in the PRO Bulk Converter API to maintain high performance and security.';
         }
-        
-        outputData.value = output;
-
     } catch (e) {
-        const inputType = conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML';
-        outputData.value = `❌ ERROR in parsing ${inputType}:\n\n${e.message}\n\nPlease check your input syntax carefully.`;
-        console.error('DataXLator Translation Error:', e);
+        outputData.value = `Error: Invalid ${conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML'} format.`;
+        outputData.classList.add('error');
     }
 }
 
-// --- 4. Bulk Conversion Functionality (PRO Feature Integration) ---
+// --- 5. Bulk Conversion Logic (Pro Tier) ---
 
 /**
- * Sends the ZIP file to the Python backend for bulk conversion and handles the resulting download.
+ * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
-    const file = bulkFileInput.files[0];
-
-    // 1. Basic Validation
-    if (!file) {
-        bulkMessage.textContent = '❌ Please select a ZIP file.';
+    bulkMessage.textContent = ''; // Clear previous messages
+    const files = bulkFileInput.files;
+    
+    if (files.length === 0) {
+        bulkMessage.textContent = 'Please select a ZIP file to upload.';
+        return;
+    }
+    
+    if (files.length > 1) {
+        bulkMessage.textContent = 'Only one ZIP file can be uploaded at a time.';
         return;
     }
     if (!file.name.toLowerCase().endsWith('.zip')) {
@@ -96,13 +102,18 @@ async function handleBulkConversion() {
     // In a real application, you would add a check here for subscription status.
     // For now, we assume the user is Pro to test the feature.
 
-    bulkMessage.textContent = '🔄 Uploading and converting...';
-    bulkConvertButton.disabled = true;
 
-    // 2. Prepare Form Data
+    const zipFile = files[0];
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('zip_file', zipFile);
+    
+    // Add tracking for the conversion attempt
+    trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: conversionDirection });
 
+    // Set UI state for loading
+    bulkConvertButton.disabled = true;
+    bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
+    
     try {
         // 3. Send Request to Flask Backend
         const response = await fetch(BULK_API_URL, {
@@ -112,31 +123,25 @@ async function handleBulkConversion() {
         });
 
         if (response.ok) {
-            // 4. Handle Successful ZIP Download
-            bulkMessage.textContent = '✅ Conversion Complete! Starting download...';
-            
-            // Extract the filename from the server's response header
-            let filename = 'dataxlator_converted_files.zip';
-            const disposition = response.headers.get('Content-Disposition');
-            if (disposition && disposition.indexOf('attachment') !== -1) {
-                const matches = /filename="?([^"]*)"?/.exec(disposition);
-                if (matches != null && matches[1]) filename = matches[1];
-            }
-            
-            // Convert response stream to a Blob
+
+            // 1. Get the converted file as a Blob
             const blob = await response.blob();
-            
-            // Create a temporary link element to trigger the download
+
+            // 2. Create a temporary URL for the Blob
             const url = window.URL.createObjectURL(blob);
+            
+            // 3. Create a temporary link element
             const a = document.createElement('a');
-            a.style.display = 'none';
             a.href = url;
-            a.download = filename; // Use the filename from the server
+            a.download = 'dataxlator_converted_files.zip'; // Set the download filename
+            
+            // 4. Programmatically click the link to start the download
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             
             // 5. Cleanup
+            window.URL.revokeObjectURL(url); // Clean up the temporary URL
+            document.body.removeChild(a); // Remove the temporary link
             bulkMessage.textContent = 'Download started successfully!';
             bulkFileInput.value = null; // Clear file input
 
@@ -162,11 +167,10 @@ async function handleBulkConversion() {
         bulkMessage.textContent = `❌ Connection Error. Is the backend server running at ${BULK_API_URL}?`;
     } finally {
         bulkConvertButton.disabled = false;
-        // Re-enable input if needed, but keeping file input clear is usually better UX
     }
 }
 
-// --- 5. Event Listeners ---
+// --- 6. Event Listeners ---
 
 // Free Feature Listeners
 swapButton.addEventListener('click', toggleDirection);
