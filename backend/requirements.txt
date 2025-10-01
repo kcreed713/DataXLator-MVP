@@ -1,5 +1,3 @@
 Flask
 PyYAML
 flask-cors
-gunicorn
-pandas
