@@ -16,7 +16,7 @@
             background-color: #1E1E1E; /* Background (Main): Dark Charcoal */
             color: #D4D4D4; /* Text (Input/Output): Light Gray Text */
             min-height: 100vh;
-            overflow-y: hidden; /* Prevent scrolling if everything fits */
+            overflow-y: auto; /* Allow scroll if needed, but strive to fit */
         }
         h1 { margin-bottom: 5px; }
         .trademark { font-size: 0.5em; vertical-align: super; }
@@ -32,7 +32,7 @@
             flex-grow: 1;
         }
         
-        /* Text Areas (Code Input/Output) - SLIGHTLY NARROWED */
+        /* Text Areas (Code Input/Output) */
         textarea { 
             flex: 1; 
             min-height: 400px; 
@@ -149,50 +149,47 @@
         }
         #teams-button:hover { background-color: #388E3C; }
 
-        /* Pricing/Pro Section (TOP LEFT CORNER - TIGHTEST LAYOUT) */
-        .pricing-section-fixed {
-            position: fixed; 
-            top: 25px; 
-            left: 20px;
-            z-index: 99;
+        /* Pricing/Pro Section (BOTTOM STRETCHED BANNER) */
+        .pricing-section-bottom {
+            width: 95%; /* Stretch across the main content width */
+            max-width: 1400px;
+            margin: 40px auto 0 auto; /* Margin above, centered */
             background-color: #252525;
-            padding: 10px; /* Reduced padding */
+            padding: 15px 20px;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            width: 280px; /* Increased width slightly to accommodate side-by-side buttons */
             text-align: center;
         }
-        .pricing-section-fixed p {
+        .pricing-section-bottom p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
-            font-size: 1em; 
+            font-size: 1.1em;
         }
         .pricing-buttons-row {
-            display: flex; /* NEW: Horizontal layout */
-            justify-content: space-between;
+            display: flex; 
+            justify-content: center; /* Center the entire row */
             align-items: center;
-            margin: 10px 0;
+            margin-top: 10px;
         }
         .pricing-buttons-row button {
-            margin: 0 5px; /* Spacing between buttons */
+            margin: 0 15px; /* Spacing between buttons */
             background-color: #D32F2F; 
             color: white;
-            padding: 8px 10px; 
-            font-size: 0.9em; 
-            width: 45%; /* Buttons share space */
+            padding: 10px 20px; /* Slightly larger buttons */
+            font-size: 1em; 
+            width: 200px; /* FIXED WIDTH for same size */
+            flex-shrink: 0;
         }
-        .pricing-buttons-row button:first-child { margin-left: 0; }
-        .pricing-buttons-row button:last-child { margin-right: 0; }
         .or-text {
-            font-size: 0.8em;
+            font-size: 1em;
             color: #999;
-            flex-shrink: 0; /* Prevents "OR" from shrinking */
+            flex-shrink: 0;
         }
         .urgent-text {
             color: #FFC107 !important; 
-            font-size: 0.8em !important; 
-            margin-top: 5px;
+            font-size: 0.9em !important; 
+            margin-top: 10px;
         }
 
         /* Footer */
@@ -221,26 +218,6 @@
         </a>
     </div>
 
-    <div class="pricing-section-fixed">
-        <p style="margin-bottom: 8px;">Unlock Pro Features:</p>
-        
-        <div class="pricing-buttons-row">
-            <button id="monthly-pro-button"
-                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
-                    title="Start a recurring monthly subscription">
-                Monthly: $7/mo
-            </button>
-            <span class="or-text">OR</span>
-            <button id="lifetime-pro-button"
-                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
-                    title="Get access forever with a single payment">
-                Lifetime: $29
-            </button>
-        </div>
-
-        <p class="urgent-text">Limited Time Introductory Offer!</p>
-    </div>
-    
     <div class="container">
         <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
 
@@ -280,6 +257,26 @@
         </div>
 
         <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
+    </div>
+
+    <div class="pricing-section-bottom">
+        <p>Unlock Pro Features:</p>
+        
+        <div class="pricing-buttons-row">
+            <button id="monthly-pro-button"
+                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                    title="Start a recurring monthly subscription">
+                Pro Monthly: $7/mo
+            </button>
+            <span class="or-text">OR</span>
+            <button id="lifetime-pro-button"
+                    onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                    title="Get access forever with a single payment">
+                Lifetime Access: $29
+            </button>
+        </div>
+
+        <p class="urgent-text">Limited Time Introductory Offer!</p>
     </div>
 
     <footer>
