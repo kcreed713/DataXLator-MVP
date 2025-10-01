@@ -9,10 +9,13 @@ from werkzeug.datastructures import FileStorage
 
 app = Flask(__name__)
 
-# Enable CORS (critical for client-side JS)
-CORS(app) 
+# Enable CORS explicitly for production deployment
+# This allows your GitHub Pages frontend (kcreed713.github.io) to talk to the Render backend.
+# The 'resources' line ensures the /bulk-convert endpoint is included.
+CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 # --- Configuration ---
+# Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
 # --- Helper Functions for Conversion ---
