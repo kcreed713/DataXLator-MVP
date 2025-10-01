@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataXLator™ - JSON ↔ YAML Converter</title>
-    
+
+    <!-- Minimalist Dark Mode Styling (High Readability) -->
+
     <style>
         /* General Setup */
         body { 
@@ -35,7 +37,7 @@
         textarea { 
             flex: 1; 
             min-height: 400px; 
-            padding: 15px; 
+            padding: 15px;
             font-size: 14px; 
             font-family: 'Source Code Pro', monospace; 
             background-color: #2D2D2D; /* Lighter Charcoal for content boxes */
@@ -212,13 +214,13 @@
 
         <textarea id="output-data" placeholder="Translated data will appear here..." readonly title="Output Data Area"></textarea>
     </div>
-
     <footer>
         <p style="font-size: 0.8em; margin-top: 40px; color: #555;">
             Copyright &copy; 2025 DataXLator<span class="trademark">™</span>. <a href="LICENSE.md" style="color: #007ACC; text-decoration: none;">All rights reserved.</a>
         </p>
     </footer>
 
+    <!-- --- JAVASCRIPT LIBRARIES & LOGIC --- -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script src="app.js"></script>
 </body>
