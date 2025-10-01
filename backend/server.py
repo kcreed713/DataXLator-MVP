@@ -2,19 +2,17 @@ import io
 import json
 import zipfile
 import yaml
-import csv # Built-in Python module for CSV handling
+import csv
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS 
 from werkzeug.datastructures import FileStorage
 
 app = Flask(__name__)
 
-# Enable CORS for all routes (necessary for client-side JS on GitHub Pages to talk to localhost)
-# For production deployment, you would restrict this to your specific domain
+# Enable CORS (critical for client-side JS)
 CORS(app) 
 
 # --- Configuration ---
-# Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
 # --- Helper Functions for Conversion ---
@@ -22,12 +20,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 def json_to_yaml(data_str):
     """Converts a JSON string to a YAML string."""
     data = json.loads(data_str)
-    # Using safe_dump ensures only standard Python objects are serialized
     return yaml.safe_dump(data, default_flow_style=False)
 
 def yaml_to_json(data_str):
     """Converts a YAML string to a JSON string (formatted with 2 spaces)."""
-    # Use safe_load to prevent arbitrary code execution from malicious YAML
     data = yaml.safe_load(data_str)
     return json.dumps(data, indent=2)
 
@@ -38,160 +34,121 @@ def json_to_sql_insert(json_data_str, table_name="your_table"):
     if not isinstance(data, list) or not data:
         raise ValueError("JSON data must be a non-empty array of objects.")
         
-    # Assuming all objects have the same keys (headers)
-    keys = list(data[0].keys())
+    columns = data[0].keys()
+    columns_str = ", ".join(columns)
     
     sql_statements = []
     
-    # Start building the template for the INSERT statement
-    cols_str = ", ".join(f"`{k}`" for k in keys)
-    insert_template = f"INSERT INTO `{table_name}` ({cols_str}) VALUES "
-    
-    
     for row in data:
         values = []
-        for key in keys:
-            value = row.get(key)
-            if value is None:
-                values.append("NULL")
-            elif isinstance(value, (int, float)):
-                values.append(str(value))
+        for col in columns:
+            value = row.get(col)
+            if isinstance(value, str):
+                # FIX: Corrected quote escaping syntax for Python f-string
+                values.append(f"'{value.replace('\'', '\'\'')}'") 
+            elif value is None:
+                values.append('NULL')
             else:
-                # Escape single quotes and wrap in single quotes for SQL string literal
-                safe_value = str(value).replace("'", "''")
-                values.append(f"'{safe_value}'")
+                values.append(str(value))
         
         values_str = ", ".join(values)
-        sql_statements.append(f"{insert_template}({values_str});")
+        sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({values_str});"
+        sql_statements.append(sql)
         
     return "\n".join(sql_statements)
 
+def csv_to_json(data_str):
+    """Converts CSV string to a JSON array of objects."""
+    f = io.StringIO(data_str)
+    reader = csv.DictReader(f)
+    json_data = list(reader)
+    return json.dumps(json_data, indent=2)
 
-def csv_to_json(csv_data_str):
-    """Converts a CSV string to a JSON array of objects."""
-    # Use StringIO to treat the string data like a file for the csv module
-    reader = csv.DictReader(io.StringIO(csv_data_str))
-    
-    # Read all rows into a list of dictionaries
-    data = list(reader)
-    
-    # Return the JSON string representation
-    return json.dumps(data, indent=2)
-
-# --- NEW: Single-Text PRO API Endpoints ---
-
-@app.route('/convert/csv-to-json', methods=['POST'])
-def single_csv_to_json():
-    """API to convert CSV text input to JSON output."""
-    data = request.get_data(as_text=True)
-    if not data:
-        return jsonify({"error": "CSV input is empty."}), 400
-    try:
-        json_output = csv_to_json(data)
-        return jsonify({"result": json_output})
-    except Exception as e:
-        return jsonify({"error": f"CSV Conversion Error: {str(e)}"}), 500
-
-@app.route('/convert/json-to-sql', methods=['POST'])
-def single_json_to_sql():
-    """API to convert JSON array input to SQL INSERT statements."""
-    data = request.get_data(as_text=True)
-    if not data:
-        return jsonify({"error": "JSON input is empty."}), 400
-        
-    # NOTE: In a production app, you would prompt the user for the table name. 
-    # For MVP, we use a placeholder 'dataxlator_table'.
-    table_name = request.args.get('table_name', 'dataxlator_table')
-
-    try:
-        sql_output = json_to_sql_insert(data, table_name=table_name)
-        return jsonify({"result": sql_output})
-    except ValueError as e:
-        return jsonify({"error": f"JSON Input Error: {str(e)}"}), 400
-    except Exception as e:
-        return jsonify({"error": f"SQL Generation Error: {str(e)}"}), 500
-
-# --- Core Bulk API Endpoint ---
+# --- Main API Route for Bulk Conversion (The Monetized Feature) ---
 
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
     """
-    Handles the zip file upload, processes all files inside, and returns a converted zip.
+    Handles bulk conversion of files contained within an uploaded ZIP file.
     """
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-    # [Rest of bulk_convert function remains unchanged]
+    if 'zip_file' not in request.files:
+        return jsonify({"error": "No ZIP file part in the request."}), 400
 
-    file: FileStorage = request.files['file']
-    
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+    uploaded_file = request.files['zip_file']
 
-    # Ensure the uploaded file is a zip
-    if not file.filename.endswith('.zip'):
-        return jsonify({"error": "Only ZIP files are supported for bulk conversion"}), 400
-
-    # Create in-memory buffer for the output ZIP file
-    output_zip_buffer = io.BytesIO()
+    if not uploaded_file.filename.lower().endswith('.zip'):
+        return jsonify({"error": "File must be a ZIP archive."}), 400
 
     try:
-        # Read the input ZIP file into an in-memory buffer
-        input_zip_buffer = io.BytesIO(file.read())
+        input_zip_buffer = io.BytesIO(uploaded_file.read())
+        output_zip_buffer = io.BytesIO()
         
-        # Open the input ZIP and output ZIP files
-        with zipfile.ZipFile(input_zip_buffer, 'r') as input_zip, \
-             zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as output_zip:
-
-            file_count = 0
-            for filename in input_zip.namelist():
-                # Skip directories and non-config files
-                if filename.endswith('/') or not (filename.endswith('.json') or filename.endswith('.yaml') or filename.endswith('.yml')):
-                    continue
+        file_count = 0
+        
+        with zipfile.ZipFile(input_zip_buffer, 'r') as input_zip:
+            with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as output_zip:
                 
-                file_count += 1
-                
-                # 1. Read the file content
-                with input_zip.open(filename) as source_file:
-                    content_bytes = source_file.read()
-                    content_str = content_bytes.decode('utf-8')
-                
-                converted_content = None
-                new_filename = filename
-                
-                # 2. Determine conversion direction and execute
-                try:
-                    if filename.endswith('.json'):
-                        # JSON -> YAML
-                        converted_content = json_to_yaml(content_str)
-                        new_filename = filename.replace('.json', '.yaml')
-                        
-                    elif filename.endswith(('.yaml', '.yml')):
-                        # YAML -> JSON
-                        converted_content = yaml_to_json(content_str)
-                        # Ensure we convert .yaml or .yml to .json
-                        if filename.endswith('.yml'):
-                            new_filename = filename.replace('.yml', '.json')
-                        else:
-                            new_filename = filename.replace('.yaml', '.json')
-                            
-                except Exception as e:
-                    # Write an error file instead of crashing the batch
-                    error_message = f"ERROR converting {filename}: {str(e)}"
-                    print(error_message)
-                    new_filename = f"{filename}_ERROR.txt"
-                    converted_content = error_message
+                for filename in input_zip.namelist():
+                    if filename.endswith('/'):
+                        continue
                     
-                # 3. Write the converted or error content to the output ZIP
-                if converted_content:
-                    output_zip.writestr(new_filename, converted_content.encode('utf-8'))
+                    converted_content = None
+                    new_filename = None
+                    convert_type = None
 
-            if file_count == 0:
-                return jsonify({"error": "ZIP file contained no recognizable JSON or YAML files (.json, .yaml, .yml)"}), 400
+                    try:
+                        with input_zip.open(filename) as file:
+                            content = file.read().decode('utf-8')
+                            
+                            file_count += 1
+                            
+                            lower_filename = filename.lower()
+                            
+                            # --- Conversion Logic ---
+                            if lower_filename.endswith(('.json')):
+                                # Try JSON to YAML
+                                try:
+                                    # We try JSON->YAML first, as it's the default
+                                    converted_content = json_to_yaml(content)
+                                    new_filename = filename.replace('.json', '.yaml')
+                                    convert_type = 'JSON_TO_YAML'
+                                except:
+                                    # If JSON->YAML fails (e.g., if it's an array of objects), try JSON->SQL
+                                    converted_content = json_to_sql_insert(content)
+                                    new_filename = filename.replace('.json', '.sql')
+                                    convert_type = 'JSON_TO_SQL'
+                                
+                            elif lower_filename.endswith(('.yaml', '.yml')):
+                                # YAML to JSON conversion
+                                converted_content = yaml_to_json(content)
+                                new_filename = filename.replace('.yaml', '.json').replace('.yml', '.json')
+                                convert_type = 'YAML_TO_JSON'
+
+                            elif lower_filename.endswith(('.csv')):
+                                # CSV to JSON conversion
+                                converted_content = csv_to_json(content)
+                                new_filename = filename.replace('.csv', '.json')
+                                convert_type = 'CSV_TO_JSON'
+                            # --- End Conversion Logic ---
+                            
+                    except Exception as e:
+                        # Write an error file instead of crashing the batch
+                        error_message = f"ERROR converting {filename} (Type: {convert_type or 'Unknown'}): {str(e)}"
+                        print(error_message)
+                        new_filename = f"{filename}_ERROR.txt"
+                        converted_content = error_message
+                        
+                    # Write the converted or error content to the output ZIP
+                    if converted_content:
+                        output_zip.writestr(new_filename, converted_content.encode('utf-8'))
+
+                if file_count == 0:
+                    return jsonify({"error": "ZIP file contained no recognizable files (.json, .yaml, .yml, .csv)"}), 400
 
         # Prepare buffer for response
         output_zip_buffer.seek(0)
         
-        # 4. Send the new ZIP file back to the client
+        # Send the new ZIP file back to the client
         return send_file(
             output_zip_buffer,
             mimetype='application/zip',
