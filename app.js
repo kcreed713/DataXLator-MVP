@@ -61,14 +61,16 @@ function translateData() {
 
     try {
 
+        // Since we import js-yaml in index.html, we use it here for the free tier.
         // Since the free conversion is done purely in the browser, we use built-in functions
         if (conversionDirection === 'json-to-yaml') {
             const jsonObject = JSON.parse(data);
-            // Placeholder for YAML output
-            outputData.value = `// JSON ➡️ YAML (Browser Preview)\n${JSON.stringify(jsonObject, null, 2)}`; 
+            // FIX: Using jsyaml.dump() for actual JSON -> YAML conversion
+            outputData.value = jsyaml.dump(jsonObject); 
         } else { // yaml-to-json
-            // Placeholder to encourage use of the Pro bulk feature for real YAML.
-            outputData.value = 'Note: Real-time YAML to JSON conversion requires a YAML library, which is only supported in the PRO Bulk Converter API to maintain high performance and security.';
+            // FIX: Using jsyaml.load() for actual YAML -> JSON conversion
+            const yamlObject = jsyaml.load(data);
+            outputData.value = JSON.stringify(yamlObject, null, 2);
         }
     } catch (e) {
         outputData.value = `Error: Invalid ${conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML'} format.`;
