@@ -16,6 +16,7 @@
             background-color: #1E1E1E; /* Background (Main): Dark Charcoal */
             color: #D4D4D4; /* Text (Input/Output): Light Gray Text */
             min-height: 100vh;
+            overflow-y: hidden; /* Prevent scrolling if everything fits */
         }
         h1 { margin-bottom: 5px; }
         .trademark { font-size: 0.5em; vertical-align: super; }
@@ -38,8 +39,8 @@
             padding: 15px; 
             font-size: 14px; 
             font-family: 'Source Code Pro', monospace; 
-            background-color: #2D2D2D; /* Lighter Charcoal for content boxes */
-            color: #D4D4D4; /* Text (Input/Output) */
+            background-color: #2D2D2D; 
+            color: #D4D4D4; 
             border: 1px solid #3C3C3C; 
             border-radius: 8px; 
             resize: none; 
@@ -47,9 +48,9 @@
             transition: border-color 0.3s;
         }
         textarea:focus { border-color: #007ACC; outline: none; }
-        textarea.error { border-color: #D32F2F; /* Error: Deep Red */ }
+        textarea.error { border-color: #D32F2F; }
 
-        /* Controls Panel */
+        /* Controls Panel (Central) */
         .controls-panel {
             width: 250px;
             display: flex;
@@ -60,9 +61,10 @@
             background-color: #252525;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            /* Removed flex-based ordering inside the panel to rely on simpler document flow */
         }
         
-        /* Primary Action Button (Convert) */
+        /* Buttons - General Styling */
         button {
             padding: 10px 15px;
             border: none;
@@ -78,11 +80,12 @@
             cursor: not-allowed; 
         }
 
+        /* Primary Action Button (Convert) */
         #execute-convert {
-            background-color: #007ACC; /* Accent/Action: Vibrant Blue */
+            background-color: #007ACC; 
             color: white;
-            margin-top: 10px;
-            margin-bottom: 10px;
+            margin-top: 5px; /* Tighter spacing */
+            margin-bottom: 15px;
         }
         #execute-convert:hover { background-color: #005A9C; } 
 
@@ -90,7 +93,7 @@
         .format-selector-group {
             width: 100%;
             text-align: left;
-            margin-bottom: 5px; /* Reduced margin to tighten layout */
+            margin-bottom: 5px; 
         }
         .format-selector-group label {
             display: block;
@@ -108,15 +111,14 @@
             border: 1px solid #555;
             font-size: 1em;
         }
-
+        
         /* Bulk Converter Section */
         .bulk-converter {
             width: 100%;
             border-top: 1px solid #3C3C3C;
             padding-top: 15px;
-            margin-top: 20px;
+            margin-top: 10px; /* Tighter spacing */
             text-align: center;
-            order: 4; /* Ensures it's after the free conversion */
         }
         #bulk-message {
             min-height: 20px;
@@ -131,38 +133,50 @@
         }
         #bulk-convert-button:hover { background-color: #005A9C; }
         
-        /* Teams Button */
+        /* Teams Button (TOP RIGHT CORNER) */
+        #teams-button-container {
+            position: absolute;
+            top: 25px;
+            right: 20px;
+            z-index: 100;
+        }
         #teams-button {
             background-color: #4CAF50; 
             color: white;
-            margin-top: 20px;
-            order: 1; /* Pushes to the very top */
+            padding: 10px 20px;
+            width: auto; /* Allow button to size to content */
+            min-width: 200px;
+            font-size: 1em;
         }
         #teams-button:hover { background-color: #388E3C; }
 
-        /* Pricing/Pro Section */
-        .pricing-section {
-            width: 100%;
+        /* Pricing/Pro Section (TOP LEFT CORNER) */
+        .pricing-section-fixed {
+            position: absolute;
+            top: 100px; /* Below the main title area */
+            left: 20px;
+            z-index: 99;
+            background-color: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            width: 280px;
             text-align: center;
-            border-top: 1px solid #3C3C3C;
-            padding-top: 15px;
-            margin-top: 20px;
-            order: 2; /* Pushes to the second highest position */
         }
-        .pricing-section p {
+        .pricing-section-fixed p {
             margin: 0;
             font-weight: bold;
             color: #4CAF50;
             font-size: 1.1em;
         }
-        .pricing-section button {
+        .pricing-section-fixed button {
             margin-top: 10px;
             background-color: #D32F2F; 
             color: white;
             padding: 12px 15px;
             font-size: 1em;
         }
-        .pricing-section button:hover { background-color: #B71C1C; }
+        .pricing-section-fixed button:hover { background-color: #B71C1C; }
         .urgent-text {
             color: #FFC107 !important; 
             font-size: 0.9em !important;
@@ -170,7 +184,7 @@
 
         /* Footer */
         footer { 
-            margin-top: 40px; 
+            margin-top: 20px; /* Reduced margin for space efficiency */
             width: 100%; 
             max-width: 1400px;
             text-align: center;
@@ -186,36 +200,38 @@
     <h1>DataXLator<span class="trademark">™</span></h1>
     <p class="subtitle">The universal single-file and bulk data converter.</p>
 
+    <div id="teams-button-container">
+        <a href="teams.html" style="width: 100%; text-decoration: none;">
+            <button id="teams-button" title="Upgrade to our B2B Teams plan">
+                For Teams & Enterprise
+            </button>
+        </a>
+    </div>
+
+    <div class="pricing-section-fixed">
+        <p>Unlock Pro Features:</p>
+        <button id="monthly-pro-button"
+                onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                title="Start a recurring monthly subscription">
+            Pro Monthly: $7/mo
+        </button>
+        
+        <p style="margin: 15px 0 5px 0;">OR</p>
+
+        <button id="lifetime-pro-button"
+                onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                title="Get access forever with a single payment">
+            Lifetime Access: $29
+        </button>
+        <p class="urgent-text">Limited Time Introductory Offer!</p>
+    </div>
+    
     <div class="container">
         <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
 
         <div class="controls-panel">
             
-            <a href="teams.html" style="width: 100%; text-decoration: none; order: 1;">
-                <button id="teams-button" title="Upgrade to our B2B Teams plan">
-                    For Teams & Enterprise
-                </button>
-            </a>
-
-            <div class="pricing-section" style="order: 2;">
-                <p>Unlock Pro Features:</p>
-                <button id="monthly-pro-button"
-                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
-                        title="Start a recurring monthly subscription">
-                    Pro Monthly: $7/mo
-                </button>
-                
-                <p style="margin: 15px 0 5px 0;">OR</p>
-
-                <button id="lifetime-pro-button"
-                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
-                        title="Get access forever with a single payment">
-                    Lifetime Access: $29
-                </button>
-                <p class="urgent-text">Limited Time Introductory Offer!</p>
-            </div>
-            
-            <div class="format-selector-group" style="order: 3;">
+            <div class="format-selector-group">
                 <label for="input-format">Input Format:</label>
                 <select id="input-format">
                     <option value="json">JSON</option>
@@ -224,7 +240,7 @@
                 </select>
             </div>
 
-            <div class="format-selector-group" style="order: 3;">
+            <div class="format-selector-group">
                 <label for="output-format">Output Format:</label>
                 <select id="output-format">
                     <option value="yaml">YAML</option>
@@ -233,11 +249,11 @@
                 </select>
             </div>
 
-            <button id="execute-convert" title="Execute Single File Conversion" style="order: 3;">
+            <button id="execute-convert" title="Execute Single File Conversion">
                 Convert Data
             </button>
             
-            <div class="bulk-converter" style="order: 4;">
+            <div class="bulk-converter" style="border: none; padding-top: 0; margin-top: 5px;">
                 <p style="margin-bottom: 5px; font-weight: bold; color: #4CAF50;">PRO: Bulk ZIP Conversion</p>
                 <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
                 <button id="bulk-convert-button" title="Upload and convert multiple files">
