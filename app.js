@@ -50,39 +50,55 @@ function trackEvent(eventName, eventProperties = {}) {
 // --- 4. Conversion Logic (Free Tier) ---
 
 /**
- * Executes the conversion of data based on the current direction.
+ * Executes the data conversion based on the selected formats.
+ * This is triggered on input change, format change, or button click.
  */
 function translateData() {
-    outputData.classList.remove('error');
-    const data = inputData.value.trim();
-    if (!data) {
-        outputData.value = '';
-        return;
-    }
+    outputData.value = ''; // Clear output initially
+    outputData.classList.remove('error'); // Clear error state
+
+    const input = inputData.value.trim();
+    const inputFormatValue = inputFormat.value;
+    const outputFormatValue = outputFormat.value;
     
-    // Check if input looks like a format that requires Pro (SQL/CSV)
-    if (data.includes('INSERT INTO') || (conversionDirection === 'json-to-yaml' && data.includes(';'))) {
-        outputData.value = 'SQL conversion requires the PRO Bulk Converter API for advanced database formatting.';
-        outputData.classList.add('error');
-        return;
+    // 1. Check for empty input
+    if (input.length === 0) {
+        return; // Do nothing if input is empty
     }
-    if (data.includes(',') && data.includes('\n') && !data.includes('{')) {
-        outputData.value = 'CSV conversion requires the PRO Bulk Converter API for header mapping and data structure validation.';
+
+    // 2. Pro Feature Monetization Check (CSV, SQL)
+    if (inputFormatValue === 'csv' || outputFormatValue === 'sql') {
+        outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nConversion between CSV, SQL, or other advanced formats requires a Pro subscription.\n\nPlease switch to the "Pro Features" tab to unlock advanced conversions.';
         outputData.classList.add('error');
+        // Log the monetization attempt
+        trackEvent('PRO_Conversion_Attempt', { input: inputFormatValue, output: outputFormatValue });
         return;
     }
 
+    // 3. Determine the conversion path
+    let output = '';
+    let conversionPath = `${inputFormatValue}-to-${outputFormatValue}`;
+    
     try {
-        // Since we import js-yaml in index.html, we use it here for the free tier.
-        if (conversionDirection === 'json-to-yaml') {
-            const jsonObject = JSON.parse(data);
-            outputData.value = jsyaml.dump(jsonObject); 
-        } else { // yaml-to-json
-            const yamlObject = jsyaml.load(data);
-            outputData.value = JSON.stringify(yamlObject, null, 2);
+        if (conversionPath === 'json-to-yaml') {
+            // Note: The js-yaml library is used for both conversion functions.
+            const data = JSON.parse(input);
+            output = jsyaml.dump(data);
+
+        } else if (conversionPath === 'yaml-to-json') {
+            const data = jsyaml.load(input); // Use js-yaml's load for YAML input
+            output = JSON.stringify(data, null, 2); // Use JSON.stringify for JSON output
+
+        } else {
+            // Should not happen with current options, but good for safety
+            output = `Error: Unsupported conversion path (${conversionPath}).`;
         }
+
+        outputData.value = output;
+
     } catch (e) {
-        outputData.value = `Error: Invalid ${conversionDirection === 'json-to-yaml' ? 'JSON' : 'YAML'} format.`;
+        // 4. Handle conversion errors (e.g., invalid JSON/YAML syntax)
+        outputData.value = `Error: Invalid ${inputFormatValue.toUpperCase()} format.\n\nDetails: ${e.message}`;
         outputData.classList.add('error');
     }
 }
