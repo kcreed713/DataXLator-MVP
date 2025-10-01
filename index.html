@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DataXLator™ - JSON ↔ YAML Converter</title>
+    <title>DataXLator™ - Universal Data Converter</title>
     
     <style>
         /* General Setup */
@@ -62,6 +62,29 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
         }
 
+        /* Format Selectors */
+        .format-selector-group {
+            width: 100%;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+        .format-selector-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #999;
+            font-size: 0.9em;
+        }
+        .format-selector-group select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: #3C3C3C;
+            color: #D4D4D4;
+            border: 1px solid #555;
+            font-size: 1em;
+        }
+        
         /* Buttons */
         button {
             padding: 10px 15px;
@@ -82,6 +105,7 @@
         #execute-convert {
             background-color: #007ACC; /* Accent/Action: Vibrant Blue */
             color: white;
+            margin-top: 10px;
         }
         #execute-convert:hover { background-color: #005A9C; } /* Slightly darker blue on hover */
 
@@ -89,15 +113,9 @@
         #swap-button {
             background-color: #555;
             color: white;
+            margin-bottom: 20px;
         }
         #swap-button:hover { background-color: #444; }
-
-        /* Direction Display */
-        #direction-display {
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #4CAF50; /* Success/Copy: Green */
-        }
 
         /* Pricing/Pro Section */
         .pricing-section {
@@ -151,7 +169,7 @@
         #teams-button {
             background-color: #4CAF50; /* Green for B2B/Enterprise CTA */
             color: white;
-            margin-bottom: 20px;
+            margin-top: 20px;
         }
         #teams-button:hover { background-color: #388E3C; }
 
@@ -166,26 +184,41 @@
             color: #007ACC; /* Accent/Action: Vibrant Blue for links */ 
             text-decoration: none;
         }
-
     </style>
 </head>
 <body>
 
     <h1>DataXLator<span class="trademark">™</span></h1>
-    <p class="subtitle">The simple, fast JSON ↔ YAML converter.</p>
+    <p class="subtitle">The universal single-file and bulk data converter.</p>
 
     <div class="container">
-        <textarea id="input-data" placeholder="Paste JSON data here..." title="Input Data Area"></textarea>
+        <textarea id="input-data" placeholder="Paste data here..." title="Input Data Area"></textarea>
 
         <div class="controls-panel">
-            <p>Current Direction:</p>
-            <div id="direction-display">JSON ➡️ YAML</div>
+            
+            <div class="format-selector-group">
+                <label for="input-format">Input Format:</label>
+                <select id="input-format">
+                    <option value="json">JSON</option>
+                    <option value="yaml">YAML</option>
+                    <option value="csv">CSV (PRO)</option>
+                </select>
+            </div>
 
-            <button id="swap-button" title="Swap conversion direction">
-                Swap Direction
+            <div class="format-selector-group">
+                <label for="output-format">Output Format:</label>
+                <select id="output-format">
+                    <option value="yaml">YAML</option>
+                    <option value="json">JSON</option>
+                    <option value="sql">SQL INSERT (PRO)</option>
+                </select>
+            </div>
+            
+            <button id="swap-button" title="Swap Input and Output Formats">
+                Swap Formats
             </button>
 
-            <button id="execute-convert" title="Execute Free Conversion">
+            <button id="execute-convert" title="Execute Single File Conversion">
                 Convert Data
             </button>
             
