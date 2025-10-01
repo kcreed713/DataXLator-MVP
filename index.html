@@ -4,159 +4,136 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataXLator™ - JSON, YAML, CSV, SQL Converter</title>
+    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <!-- Load JS-YAML for client-side conversions -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0d1117; 
-            color: #c9d1d9; 
-        }
-        textarea {
-            resize: none;
-            min-height: 400px;
+            background-color: #0d1117; /* Dark background */
+            color: #c9d1d9; /* Light text */
         }
         .container {
             max-width: 1200px;
         }
+        textarea {
+            min-height: 400px;
+            background-color: #161b22; /* Slightly darker than body */
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            resize: none;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .pro-feature {
+            background-color: #0e4429; /* Dark green background */
+            border-left: 4px solid #3fb950;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
-    
     <!-- Header/Navigation -->
-    <header class="container mx-auto flex flex-col sm:flex-row justify-between items-center mb-8 space-y-4 sm:space-y-0">
-        <h1 class="text-3xl font-extrabold text-green-500">DataXLator™</h1>
+    <header class="container mx-auto flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-green-500">DataXLator™</h1>
         <nav class="space-x-4">
-            <a href="teams.html" class="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg shadow-lg hover:bg-green-700 transition duration-150">
-                For Teams (B2B)
+            <!-- Link to the new Teams Page -->
+            <a href="teams.html" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg shadow-lg hover:bg-indigo-700 transition duration-150">
+                For Teams
             </a>
-            <a href="https://github.com/your-username/your-repo/blob/main/README.md" class="px-4 py-2 text-sm font-semibold text-white bg-gray-700 rounded-lg shadow-lg hover:bg-gray-600 transition duration-150">
+            <a href="https://github.com/kcreed713/DataXLator-MVP/blob/main/README.md" target="_blank" class="text-sm text-gray-400 hover:text-white transition duration-150">
                 Docs
             </a>
         </nav>
     </header>
 
-    <main class="container mx-auto">
-        <!-- Tab Selector -->
-        <div class="flex border-b border-gray-700 mb-6">
-            <button id="tab-single" class="tab-button flex-1 py-3 text-lg font-semibold border-b-2 border-indigo-500 text-indigo-400 focus:outline-none">
-                Single File Conversion (Free & Pro)
-            </button>
-            <button id="tab-bulk" class="tab-button flex-1 py-3 text-lg font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-300 focus:outline-none">
-                Bulk Converter (PRO Feature)
-            </button>
-        </div>
+    <div class="container mx-auto">
+        <!-- Main Converter Area -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl">
+            <h2 class="text-xl font-semibold mb-4 text-center">Instant Config Conversion (JSON, YAML, CSV, SQL)</h2>
 
-        <!-- 1. Single Converter Panel -->
-        <div id="single-converter-panel" class="space-y-6">
-            
-            <!-- Format Selectors and Convert Button -->
-            <div class="flex flex-wrap items-center justify-center space-y-4 md:space-y-0 md:space-x-6 bg-gray-800 p-4 rounded-xl shadow-lg">
-                <!-- Input Format Select -->
-                <div class="flex flex-col w-full md:w-auto">
-                    <label for="input-format-select" class="text-sm font-medium mb-1 text-gray-400">Input Format</label>
-                    <select id="input-format-select" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-white">
-                        <option value="JSON">JSON</option>
-                        <option value="YAML">YAML</option>
-                        <option value="CSV">CSV (PRO)</option>
-                    </select>
-                </div>
+            <!-- Conversion Control Bar -->
+            <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 mb-6">
+                <!-- Input Selector -->
+                <select id="input-format-select" class="bg-gray-700 text-white p-2 rounded-lg cursor-pointer transition duration-150 hover:bg-gray-600">
+                    <option value="JSON">JSON</option>
+                    <option value="YAML">YAML</option>
+                    <option value="CSV">CSV (PRO)</option>
+                </select>
                 
-                <!-- Convert Button -->
-                <button id="execute-convert" class="w-full md:w-auto px-6 py-2 text-lg font-bold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transition duration-150 mt-4 md:mt-0">
+                <!-- Direction Display -->
+                <div id="direction-display" class="text-2xl font-bold text-green-400">
+                    JSON ➡️ YAML
+                </div>
+
+                <!-- Output Selector -->
+                <select id="output-format-select" class="bg-gray-700 text-white p-2 rounded-lg cursor-pointer transition duration-150 hover:bg-gray-600">
+                    <option value="YAML">YAML</option>
+                    <option value="JSON">JSON</option>
+                    <option value="SQL">SQL (PRO)</option>
+                </select>
+
+                <!-- Convert Button (For server-side PRO features only) -->
+                <button id="execute-convert" class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150">
                     Convert
                 </button>
-
-                <!-- Output Format Select -->
-                <div class="flex flex-col w-full md:w-auto">
-                    <label for="output-format-select" class="text-sm font-medium mb-1 text-gray-400">Output Format</label>
-                    <select id="output-format-select" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-white">
-                        <option value="YAML">YAML</option>
-                        <option value="JSON">JSON</option>
-                        <option value="SQL">SQL (PRO)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Conversion Direction Display -->
-            <div class="text-center my-4">
-                <p id="direction-display" class="text-2xl font-bold text-gray-300">JSON ➡️ YAML</p>
             </div>
             
-            <!-- NEW LOCATION: PRO UPGRADE CTAS (Better Visibility) -->
-            <div class="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4 mb-6">
-                <a href="https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00" class="flex-1 text-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-xl transition duration-150 transform hover:scale-[1.02]">
-                    Upgrade Pro - $7/mo
-                </a>
-                <a href="https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01" class="flex-1 text-center px-6 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg shadow-xl transition duration-150 transform hover:scale-[1.02]">
-                    Lifetime Access (Intro $29)
-                </a>
-            </div>
-            <!-- END NEW CTA LOCATION -->
-
-            <!-- Input/Output Textareas -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Input Panel -->
-                <div>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Input Data</h3>
-                    <textarea id="input-data" placeholder="Paste your data here (JSON, YAML, CSV...)" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                <div class="flex flex-col">
+                    <label for="input-data" class="text-lg font-medium mb-2">Input</label>
+                    <textarea id="input-data" placeholder="Paste JSON data here..." class="flex-grow p-4 rounded-lg shadow-inner"></textarea>
                 </div>
-                <!-- Output Panel -->
-                <div>
-                    <h3 class="text-xl font-semibold mb-3 text-white">Output Data</h3>
-                    <textarea id="output-data" placeholder="Converted output will appear here" readonly class="w-full bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
-                </div>
-            </div>
-
-            
-        </div>
-        
-        <!-- 2. Bulk Converter Panel (Initially Hidden) -->
-        <div id="bulk-converter-panel" class="space-y-6 hidden">
-            <div class="bg-yellow-900/20 border border-yellow-700 p-6 rounded-xl shadow-lg text-center">
-                <h3 class="text-2xl font-bold text-yellow-400 mb-3">Bulk Conversion (PRO Feature)</h3>
-                <p class="text-gray-300 mb-6">Process hundreds of files at once. Upload a ZIP file containing JSON/YAML, and receive a converted ZIP file in return.</p>
                 
-                <div class="flex flex-col items-center space-y-4">
-                    <input type="file" id="bulk-file-input" accept=".zip" class="text-white bg-gray-700 p-2 rounded-lg border border-gray-600 cursor-pointer">
-                    <button id="bulk-convert-button" class="px-8 py-3 text-lg font-bold text-white bg-indigo-600 rounded-full shadow-lg hover:bg-indigo-700 transition duration-200">
-                        Convert ZIP
-                    </button>
-                    <p id="bulk-message" class="mt-4 text-sm text-gray-400"></p>
+                <!-- Output Panel -->
+                <div class="flex flex-col">
+                    <label for="output-data" class="text-lg font-medium mb-2">Output</label>
+                    <textarea id="output-data" readonly placeholder="Output will appear here..." class="flex-grow p-4 rounded-lg shadow-inner"></textarea>
                 </div>
             </div>
         </div>
 
-    </main>
-    
-    <!-- Footer/Script Loading -->
-    <footer class="container mx-auto text-center mt-12">
+        <!-- Call to Action / Upgrade Section -->
+        <div class="text-center mt-12 mb-12">
+            <p class="text-2xl font-light text-gray-300">
+                Need more power? Unlock the features the pros use.
+            </p>
+            <!-- Primary Monthly CTA -->
+            <a href="https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00" class="inline-block mt-4 px-8 py-3 bg-yellow-500 text-gray-900 text-xl font-bold rounded-full shadow-xl transform hover:scale-105 transition duration-300 ease-in-out">
+                Upgrade to Pro - $7/mo
+            </a>
+            <!-- Secondary Lifetime CTA -->
+            <p class="text-sm mt-3">
+                <a href="https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01" class="text-gray-400 hover:text-yellow-500 transition duration-150 underline">
+                    Or get Lifetime Access for a one-time $29 (Intro Price)
+                </a>
+            </p>
+        </div>
+
+        <!-- Bulk Converter PRO Feature Section -->
+        <div class="pro-feature p-6 rounded-xl shadow-2xl mt-8">
+            <h3 class="text-2xl font-bold text-green-300 mb-4">✨ Pro Feature: Bulk Converter (ZIP Processing)</h3>
+            <p class="text-gray-200 mb-4">Upload a ZIP file containing multiple configuration files (JSON or YAML), and get a converted ZIP file back instantly.</p>
+            <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
+                <input type="file" id="bulk-file-input" accept=".zip" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-green-500 flex-grow">
+                <button id="bulk-convert-button" class="px-8 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 w-full md:w-auto">
+                    Convert ZIP
+                </button>
+            </div>
+            <p id="bulk-message" class="text-sm mt-3 font-medium text-gray-300"></p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="container mx-auto text-center mt-16">
         <p style="font-size: 0.8em; margin-top: 40px; color: #555;">
-            DataXLator™ is a privacy-first tool. All free JSON/YAML conversions happen 100% in your browser.
+            DataXLator™ is a proprietary product. 
+            <a href="LICENSE.md" class="text-gray-400 hover:text-white transition duration-150 underline">All rights reserved.</a>
         </p>
     </footer>
 
-    <script>
-        // Tab switching logic (outside of app.js)
-        document.getElementById('tab-single').addEventListener('click', () => {
-            document.getElementById('single-converter-panel').classList.remove('hidden');
-            document.getElementById('bulk-converter-panel').classList.add('hidden');
-            document.getElementById('tab-single').classList.add('border-indigo-500', 'text-indigo-400');
-            document.getElementById('tab-single').classList.remove('border-transparent', 'text-gray-500');
-            document.getElementById('tab-bulk').classList.remove('border-indigo-500', 'text-indigo-400');
-            document.getElementById('tab-bulk').classList.add('border-transparent', 'text-gray-500');
-        });
-
-        document.getElementById('tab-bulk').addEventListener('click', () => {
-            document.getElementById('single-converter-panel').classList.add('hidden');
-            document.getElementById('bulk-converter-panel').classList.remove('hidden');
-            document.getElementById('tab-bulk').classList.add('border-indigo-500', 'text-indigo-400');
-            document.getElementById('tab-bulk').classList.remove('border-transparent', 'text-gray-500');
-            document.getElementById('tab-single').classList.remove('border-indigo-500', 'text-indigo-400');
-            document.getElementById('tab-single').classList.add('border-transparent', 'text-gray-500');
-        });
-    </script>
     <script src="app.js"></script>
 </body>
 </html>
