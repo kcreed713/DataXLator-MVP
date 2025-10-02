@@ -13,19 +13,21 @@
     </script>
 
     <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <title>DataXLator™ - Universal JSON to YAML & Bulk Data Converter Tool</title>
-    
-    <meta name="description" content="DataXLator is the universal data conversion tool. Convert JSON to YAML, YAML to JSON, and unlock Pro features for CSV/SQL and lightning-fast bulk ZIP processing. Free to use, built for developers.">
-    
-    <meta property="og:title" content="DataXLator™ - JSON, YAML & Bulk Data Converter">
-    <meta property="og:description" content="The fastest way to convert JSON to YAML and back, with Pro support for bulk file conversions (CSV/SQL).">
-    <meta property="og:url" content="https://kcreed713.github.io/DataXLator-MVP/index.html">
-    <meta property="og:type" content="website">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <script type="application/ld+json">
+        <title>DataXLator™ - Universal JSON to YAML & Bulk Data Converter Tool</title>
+
+        <meta name="description"
+            content="DataXLator is the universal data conversion tool. Convert JSON to YAML, YAML to JSON, and unlock Pro features for CSV/SQL and lightning-fast bulk ZIP processing. Free to use, built for developers.">
+
+        <meta property="og:title" content="DataXLator™ - JSON, YAML & Bulk Data Converter">
+        <meta property="og:description"
+            content="The fastest way to convert JSON to YAML and back, with Pro support for bulk file conversions (CSV/SQL).">
+        <meta property="og:url" content="https://kcreed713.github.io/DataXLator-MVP/index.html">
+        <meta property="og:type" content="website">
+
+        <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
@@ -41,285 +43,285 @@
     }
     </script>
 
-    <style>
-        /* General Setup */
-        body {
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            background-color: #1E1E1E;
-            /* Background (Main): Dark Charcoal */
-            color: #D4D4D4;
-            /* Text (Input/Output): Light Gray Text */
-            min-height: 100vh;
-            overflow-y: auto;
-        }
+        <style>
+            /* General Setup */
+            body {
+                font-family: 'Inter', sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 20px;
+                background-color: #1E1E1E;
+                /* Background (Main): Dark Charcoal */
+                color: #D4D4D4;
+                /* Text (Input/Output): Light Gray Text */
+                min-height: 100vh;
+                overflow-y: auto;
+            }
 
-        h1 {
-            margin-bottom: 5px;
-        }
+            h1 {
+                margin-bottom: 5px;
+            }
 
-        .trademark {
-            font-size: 0.5em;
-            vertical-align: super;
-        }
+            .trademark {
+                font-size: 0.5em;
+                vertical-align: super;
+            }
 
-        .subtitle {
-            margin-top: 0;
-            color: #999;
-        }
+            .subtitle {
+                margin-top: 0;
+                color: #999;
+            }
 
-        /* Tabs and Tab Content */
-        .tab-container {
-            display: flex;
-            width: 95%;
-            max-width: 1400px;
-            margin-top: 10px;
-            border-bottom: 2px solid #3C3C3C;
-        }
+            /* Tabs and Tab Content */
+            .tab-container {
+                display: flex;
+                width: 95%;
+                max-width: 1400px;
+                margin-top: 10px;
+                border-bottom: 2px solid #3C3C3C;
+            }
 
-        .tab-button {
-            padding: 10px 20px;
-            cursor: pointer;
-            border: none;
-            background-color: #2D2D2D;
-            color: #999;
-            font-weight: bold;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            margin-right: 5px;
-            transition: background-color 0.2s, color 0.2s;
-            width: 180px;
-            text-align: center;
-        }
+            .tab-button {
+                padding: 10px 20px;
+                cursor: pointer;
+                border: none;
+                background-color: #2D2D2D;
+                color: #999;
+                font-weight: bold;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                margin-right: 5px;
+                transition: background-color 0.2s, color 0.2s;
+                width: 180px;
+                text-align: center;
+            }
 
-        .tab-button.active {
-            background-color: #252525;
-            color: white;
-            border-bottom: 2px solid #007ACC;
-        }
+            .tab-button.active {
+                background-color: #252525;
+                color: white;
+                border-bottom: 2px solid #007ACC;
+            }
 
-        .tab-content {
-            display: none;
-            width: 100%;
-            background-color: #252525;
-            padding: 20px;
-            border-bottom-left-radius: 8px;
-            border-bottom-right-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            margin-top: -2px;
-            /* Pulls up to hide the bottom border line of the tab container */
-        }
+            .tab-content {
+                display: none;
+                width: 100%;
+                background-color: #252525;
+                padding: 20px;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+                margin-top: -2px;
+                /* Pulls up to hide the bottom border line of the tab container */
+            }
 
-        .tab-content.active {
-            display: block;
-        }
+            .tab-content.active {
+                display: block;
+            }
 
-        /* Free Converter Layout (Inside Tab) */
-        .free-converter-layout {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-        }
+            /* Free Converter Layout (Inside Tab) */
+            .free-converter-layout {
+                display: flex;
+                gap: 20px;
+                align-items: flex-start;
+            }
 
-        /* Text Areas (Code Input/Output) - RESTORED HEIGHT */
-        textarea {
-            flex: 1;
-            min-height: 400px;
-            padding: 15px;
-            font-size: 14px;
-            font-family: 'Source Code Pro', monospace;
-            background-color: #2D2D2D;
-            color: #D4D4D4;
-            border: 1px solid #3C3C3C;
-            border-radius: 8px;
-            resize: none;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            transition: border-color 0.3s;
-        }
+            /* Text Areas (Code Input/Output) - RESTORED HEIGHT */
+            textarea {
+                flex: 1;
+                min-height: 400px;
+                padding: 15px;
+                font-size: 14px;
+                font-family: 'Source Code Pro', monospace;
+                background-color: #2D2D2D;
+                color: #D4D4D4;
+                border: 1px solid #3C3C3C;
+                border-radius: 8px;
+                resize: none;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+                transition: border-color 0.3s;
+            }
 
-        textarea:focus {
-            border-color: #007ACC;
-            outline: none;
-        }
+            textarea:focus {
+                border-color: #007ACC;
+                outline: none;
+            }
 
-        textarea.error {
-            border-color: #D32F2F;
-        }
+            textarea.error {
+                border-color: #D32F2F;
+            }
 
-        /* Controls Panel (Central) */
-        .controls-panel {
-            width: 250px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            padding: 0;
-            /* Padding handled by tab content */
-            background-color: transparent;
-            box-shadow: none;
-        }
+            /* Controls Panel (Central) */
+            .controls-panel {
+                width: 250px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+                padding: 0;
+                /* Padding handled by tab content */
+                background-color: transparent;
+                box-shadow: none;
+            }
 
-        /* Buttons - General Styling */
-        button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.2s, transform 0.1s;
-            width: 100%;
-        }
+            /* Buttons - General Styling */
+            button {
+                padding: 10px 15px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: background-color 0.2s, transform 0.1s;
+                width: 100%;
+            }
 
-        button:hover {
-            transform: translateY(-1px);
-        }
+            button:hover {
+                transform: translateY(-1px);
+            }
 
-        button:disabled {
-            background-color: #555;
-            cursor: not-allowed;
-        }
+            button:disabled {
+                background-color: #555;
+                cursor: not-allowed;
+            }
 
-        /* Primary Action Button (Convert) */
-        #execute-convert {
-            background-color: #007ACC;
-            color: white;
-            margin-top: 5px;
-            margin-bottom: 15px;
-        }
+            /* Primary Action Button (Convert) */
+            #execute-convert {
+                background-color: #007ACC;
+                color: white;
+                margin-top: 5px;
+                margin-bottom: 15px;
+            }
 
-        #execute-convert:hover {
-            background-color: #005A9C;
-        }
+            #execute-convert:hover {
+                background-color: #005A9C;
+            }
 
-        /* Format Selectors */
-        .format-selector-group {
-            width: 100%;
-            text-align: left;
-            margin-bottom: 5px;
-        }
+            /* Format Selectors */
+            .format-selector-group {
+                width: 100%;
+                text-align: left;
+                margin-bottom: 5px;
+            }
 
-        .format-selector-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #999;
-            font-size: 0.9em;
-        }
+            .format-selector-group label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #999;
+                font-size: 0.9em;
+            }
 
-        .format-selector-group select {
-            width: 100%;
-            padding: 8px;
-            border-radius: 4px;
-            background-color: #3C3C3C;
-            color: #D4D4D4;
-            border: 1px solid #555;
-            font-size: 1em;
-        }
+            .format-selector-group select {
+                width: 100%;
+                padding: 8px;
+                border-radius: 4px;
+                background-color: #3C3C3C;
+                color: #D4D4D4;
+                border: 1px solid #555;
+                font-size: 1em;
+            }
 
-        /* Teams Button (Now a top-right link) */
-        #teams-link-container {
-            position: absolute;
-            top: 25px;
-            right: 20px;
-            z-index: 100;
-        }
+            /* Teams Button (Now a top-right link) */
+            #teams-link-container {
+                position: absolute;
+                top: 25px;
+                right: 20px;
+                z-index: 100;
+            }
 
-        #teams-link {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: bold;
-            display: inline-block;
-            transition: background-color 0.2s;
-        }
+            #teams-link {
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                text-decoration: none;
+                font-weight: bold;
+                display: inline-block;
+                transition: background-color 0.2s;
+            }
 
-        #teams-link:hover {
-            background-color: #388E3C;
-        }
+            #teams-link:hover {
+                background-color: #388E3C;
+            }
 
-        /* Pricing/Pro Features Layout (Inside Tab) */
-        .pricing-section-pro {
-            width: 50%;
-            margin: 0 auto;
-            text-align: center;
-            padding: 20px;
-        }
+            /* Pricing/Pro Features Layout (Inside Tab) */
+            .pricing-section-pro {
+                width: 50%;
+                margin: 0 auto;
+                text-align: center;
+                padding: 20px;
+            }
 
-        .pricing-section-pro p {
-            margin: 0;
-            font-weight: bold;
-            color: #4CAF50;
-            font-size: 1.1em;
-        }
+            .pricing-section-pro p {
+                margin: 0;
+                font-weight: bold;
+                color: #4CAF50;
+                font-size: 1.1em;
+            }
 
-        .pricing-buttons-row {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 10px;
-        }
+            .pricing-buttons-row {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin-top: 10px;
+            }
 
-        .pricing-buttons-row button {
-            margin: 0 15px;
-            background-color: #D32F2F;
-            color: white;
-            padding: 10px 20px;
-            font-size: 1em;
-            width: 200px;
-            flex-shrink: 0;
-        }
+            .pricing-buttons-row button {
+                margin: 0 15px;
+                background-color: #D32F2F;
+                color: white;
+                padding: 10px 20px;
+                font-size: 1em;
+                width: 200px;
+                flex-shrink: 0;
+            }
 
-        .or-text {
-            font-size: 1em;
-            color: #999;
-            flex-shrink: 0;
-        }
+            .or-text {
+                font-size: 1em;
+                color: #999;
+                flex-shrink: 0;
+            }
 
-        .urgent-text {
-            color: #FFC107 !important;
-            font-size: 0.9em !important;
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
+            .urgent-text {
+                color: #FFC107 !important;
+                font-size: 0.9em !important;
+                margin-top: 10px;
+                margin-bottom: 20px;
+            }
 
-        /* Bulk Converter Section (Inside Tab) */
-        .bulk-converter-pro {
-            width: 50%;
-            margin: 40px auto 0 auto;
-            text-align: center;
-            border: 1px dashed #3C3C3C;
-            padding: 20px;
-            border-radius: 8px;
-        }
+            /* Bulk Converter Section (Inside Tab) */
+            .bulk-converter-pro {
+                width: 50%;
+                margin: 40px auto 0 auto;
+                text-align: center;
+                border: 1px dashed #3C3C3C;
+                padding: 20px;
+                border-radius: 8px;
+            }
 
-        .bulk-converter-pro p {
-            font-weight: bold;
-            color: #4CAF50;
-        }
+            .bulk-converter-pro p {
+                font-weight: bold;
+                color: #4CAF50;
+            }
 
-        #bulk-convert-button {
-            margin-top: 15px;
-        }
+            #bulk-convert-button {
+                margin-top: 15px;
+            }
 
-        /* Footer */
-        footer {
-            margin-top: 40px;
-            width: 100%;
-            max-width: 1400px;
-            text-align: center;
-        }
+            /* Footer */
+            footer {
+                margin-top: 40px;
+                width: 100%;
+                max-width: 1400px;
+                text-align: center;
+            }
 
-        footer a {
-            color: #007ACC;
-            text-decoration: none;
-        }
-    </style>
-</head>
+            footer a {
+                color: #007ACC;
+                text-decoration: none;
+            }
+        </style>
+    </head>
 
 <body>
 
@@ -328,9 +330,10 @@
 
     <a href="https://www.producthunt.com/products/dataxlator?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-dataxlator"
         target="_blank"><img
-            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1021448&theme=light&t=1759384833822"
+            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1021448&theme=dark&t=1759422047488"
             alt="DataXLator™ - The&#0032;privacy&#0045;first&#0044;&#0032;ultra&#0045;fast&#0032;JSON&#0032;↔&#0032;YAML&#0032;config&#0032;converter&#0046; | Product Hunt"
             style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
     <div id="teams-link-container">
         <a id="teams-link" href="teams.html" title="Upgrade to our B2B Teams plan">
             For Teams & Enterprise
