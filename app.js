@@ -120,6 +120,15 @@ function translateData() {
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
+    bulkMessage.textContent = '🛑 PRO FEATURE REQUIRED 🛑\n\nBulk ZIP conversion requires a Pro subscription.';
+    bulkMessage.classList.add('error');
+    
+    // Log the monetization attempt before returning
+    trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK' });
+    
+    // CRITICAL: Stop the function before it hits the file selection/API call
+    return;
+
     bulkMessage.textContent = ''; // Clear previous messages
     const files = bulkFileInput.files;
     
