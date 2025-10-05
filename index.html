@@ -328,6 +328,71 @@
                 color: #007ACC;
                 text-decoration: none;
             }
+
+            /* --- Pro Feature Card Styling --- */
+
+            .pro-feature-card {
+                /* Styles the container to stand out */
+                border: 3px solid #FFD700;
+                /* Gold border */
+                background-color: #333;
+                padding: 25px;
+                margin: 30px 0;
+                border-radius: 8px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            }
+
+            .pro-content-center {
+                /* Centers the text content inside the card */
+                text-align: center;
+            }
+
+            .email-capture-form {
+                /* Makes the form input and button appear in a block */
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                /* Centers items horizontally */
+                margin-top: 15px;
+            }
+
+            #pro-email-input {
+                /* Styles the email input box */
+                padding: 12px;
+                margin-bottom: 10px;
+                width: 80%;
+                /* Takes up most of the centered area */
+                max-width: 350px;
+                /* But doesn't get too wide on large screens */
+                border: 2px solid #ccc;
+                border-radius: 5px;
+                text-align: center;
+                /* Centers the placeholder text */
+            }
+
+            /* --- The GOLD Button Style --- */
+
+            .gold-button {
+                /* Action color for the Early Access button */
+                background-color: #FFD700;
+                /* Vibrant Gold */
+                color: #000;
+                /* Black text for maximum contrast */
+                border: none;
+                padding: 12px 30px;
+                font-weight: bold;
+                font-size: 1.1em;
+                cursor: pointer;
+                border-radius: 5px;
+                transition: background-color 0.2s;
+                width: 80%;
+                max-width: 350px;
+            }
+
+            .gold-button:hover {
+                background-color: #e5c100;
+                /* Slightly darker gold on hover */
+            }
         </style>
     </head>
 
@@ -413,6 +478,25 @@
                 <p class="urgent-text">Limited Time Introductory Offer!</p>
             </div>
 
+            <div class="pro-feature-card">
+                <div class="pro-content-center">
+                    <h2>🚀 Next Level Tooling: DataXLator Pro</h2>
+
+                    <p>We're building the future of API modernization:</p>
+
+                    <p><strong>🔥 Automated SQL CREATE TABLE to GraphQL Schema Conversion.</strong></p>
+
+                    <p class="small-text">Eliminate weeks of manual schema mapping. Get early access and be the first to
+                        know when
+                        it launches!</p>
+
+                    <div class="email-capture-form">
+                        <input type="email" id="pro-email-input" placeholder="Enter email for Pro Early Access"
+                            required>
+                        <button id="early-access-button" class="gold-button">Get Early Access</button>
+                    </div>
+                </div>
+            </div>
             <!--
             <div class="bulk-converter-pro">
                 <p>PRO: Bulk ZIP Conversion</p>
