@@ -32,8 +32,13 @@ function trackEvent(eventName, eventData = {}) {
     }
 }
 
+// --- 3. Pro Status Check ---
+function isProUser() {
+    // Check if the 'dataxlator_pro_status' flag is set to 'active'
+    return localStorage.getItem('dataxlator_pro_status') === 'active';
+}
 
-// --- 3. Core Conversion Logic (Free Tier) ---
+// --- 4. Core Conversion Logic (Free Tier) ---
 
 /**
  * Helper function to safely parse a string and determine if it is valid JSON.
@@ -79,15 +84,14 @@ function translateData() {
     }
 
     // 3. Pro Feature Monetization Check (CSV/SQL)
-    if (inputFormatValue === 'csv' || outputFormatValue === 'sql') {
+    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
         outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
-        // Optional: Switch to the Pro tab (requires openTab function defined in global scope/index.html)
-        if (typeof openTab === 'function') openTab('pro'); 
-        return;
+        if (typeof openTab === 'function') openTab('pro');
+        return; // BLOCK UNLESS PRO
     }
-    
+        
     let parsedObject = null;
 
     // --- CORE LOGIC (PARSING/INPUT STAGE) ---
@@ -152,18 +156,16 @@ function translateData() {
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
-    bulkMessage.textContent = '🛑 PRO FEATURE REQUIRED 🛑\n\nBulk ZIP conversion requires a Pro subscription.';
-    // NOTE: We don't use .error class as that is for single-file conversion input error.
-    bulkMessage.style.color = '#D32F2F'; 
+    if (!isProUser()) { // NEW CHECK
+        bulkMessage.textContent = '🛑 PRO FEATURE REQUIRED 🛑\n\nBulk ZIP conversion requires a Pro subscription.';
+        // NOTE: We don't use .error class as that is for single-file conversion input error.
+        bulkMessage.style.color = '#D32F2F';
+        // Log the monetization attempt before returning
+        trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK' });
+        // CRITICAL: Stop the function before it hits the file selection/API call
+        return;
+    }
     
-    // Log the monetization attempt before returning
-    trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK' });
-    
-    // CRITICAL: Stop the function before it hits the file selection/API call
-    return;
-
-    // --- The below logic is the functional, but currently gated, Pro conversion code ---
-    /*
     bulkMessage.textContent = ''; 
     const files = bulkFileInput.files;
     
@@ -230,8 +232,7 @@ async function handleBulkConversion() {
         bulkMessage.style.color = '#D32F2F';
     } finally {
         bulkConvertButton.disabled = false;
-    }
-    */
+    }    
 }
 
 // --- 5. Event Listeners ---
