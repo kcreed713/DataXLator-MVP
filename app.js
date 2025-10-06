@@ -6,8 +6,6 @@ const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
 const inputData = document.getElementById('input-data');
 const outputData = document.getElementById('output-data');
 const executeConvertButton = document.getElementById('execute-convert');
-const swapButton = document.getElementById('swap-button');
-const directionDisplay = document.getElementById('direction-display');
 const inputFormat = document.getElementById('input-format');
 const outputFormat = document.getElementById('output-format');
 
@@ -16,31 +14,8 @@ const bulkFileInput = document.getElementById('bulk-file-input');
 const bulkConvertButton = document.getElementById('bulk-convert-button');
 const bulkMessage = document.getElementById('bulk-message');
 
-// Internal state to track the conversion direction
-let conversionDirection = 'json-to-yaml'; 
 
-// --- 2. State Management (Toggle Direction) ---
-
-/**
- * Toggles the conversion direction state and updates the UI display.
- */
-function toggleDirection() {
-    if (conversionDirection === 'json-to-yaml') {
-        conversionDirection = 'yaml-to-json';
-        directionDisplay.textContent = 'YAML ➡️ JSON';
-        inputData.placeholder = 'Paste YAML data here...';
-    } else {
-        conversionDirection = 'json-to-yaml';
-        directionDisplay.textContent = 'JSON ➡️ YAML';
-        inputData.placeholder = 'Paste JSON data here...';
-    }
-    outputData.value = '';
-    outputData.classList.remove('error');
-    bulkMessage.textContent = ''; // Clear bulk message on direction change
-}
-
-
-// --- 3. Analytics Tracking (Placeholder) ---
+// --- 2. Analytics Tracking ---
 
 /**
  * Custom function to track business objectives (monetization).
@@ -49,7 +24,6 @@ function toggleDirection() {
  * @param {object} eventData - Custom parameters (e.g., { type: 'monthly' }).
  */
 function trackEvent(eventName, eventData = {}) {
-    // Console log for local debugging (will still fire in production, but GA gets the data)
     console.log(`[ANALYTICS] Tracking Event: ${eventName}`, eventData);
     
     // GA4 IMPLEMENTATION: Check if the gtag function exists before calling it
@@ -58,7 +32,26 @@ function trackEvent(eventName, eventData = {}) {
     }
 }
 
-// --- 4. Conversion Logic (Free Tier) ---
+
+// --- 3. Core Conversion Logic (Free Tier) ---
+
+/**
+ * Helper function to safely parse a string and determine if it is valid JSON.
+ * @param {string} str The input string.
+ * @returns {object|null} The parsed object if valid JSON, otherwise null.
+ */
+function tryParseJSON(str) {
+    if (typeof str !== 'string' || str.trim().length === 0) {
+        return null;
+    }
+    try {
+        // NOTE: JSON.parse can return primitives. We return the result to ensure
+        // the object is passed, even if it's a primitive, for conversion purposes.
+        return JSON.parse(str);
+    } catch (e) {
+        return null;
+    }
+}
 
 /**
  * Executes the data conversion based on the selected formats.
@@ -66,62 +59,102 @@ function trackEvent(eventName, eventData = {}) {
  */
 function translateData() {
     outputData.value = ''; // Clear output initially
-    outputData.classList.remove('error'); // Clear error state
+    inputData.classList.remove('error'); // Clear input error state
+    outputData.classList.remove('error'); 
 
-    const input = inputData.value.trim();
-    const inputFormatValue = inputFormat.value;
+    const inputText = inputData.value.trim();
+    let inputFormatValue = inputFormat.value; 
     const outputFormatValue = outputFormat.value;
     
     // 1. Check for empty input
-    if (input.length === 0) {
+    if (inputText.length === 0) {
         return; // Do nothing if input is empty
     }
-
-    // 2. Pro Feature Monetization Check (CSV, SQL)
-    if (inputFormatValue === 'csv' || outputFormatValue === 'sql') {
-        outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nConversion between CSV, SQL, or other advanced formats requires a Pro subscription.\n\nPlease switch to the "Pro Features" tab to unlock advanced conversions.';
-        outputData.classList.add('error');
-        // Log the monetization attempt
-        trackEvent('PRO_Conversion_Attempt', { input: inputFormatValue, output: outputFormatValue });
+    
+    // 2. NEW: Prevent conversion to the same format (UX Improvement)
+    if (inputFormatValue === outputFormatValue) {
+        outputData.value = '❌ Input and Output formats are the same. Please select different formats.';
+        inputData.classList.add('error');
         return;
     }
 
-    // 3. Determine the conversion path
-    let output = '';
+    // 3. Pro Feature Monetization Check (CSV/SQL)
+    if (inputFormatValue === 'csv' || outputFormatValue === 'sql') {
+        outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab.';
+        inputData.classList.add('error');
+        trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
+        // Optional: Switch to the Pro tab (requires openTab function defined in global scope/index.html)
+        if (typeof openTab === 'function') openTab('pro'); 
+        return;
+    }
+    
+    let parsedObject = null;
+
+    // --- CORE LOGIC (PARSING/INPUT STAGE) ---
+    
+    // Attempt 1: Auto-detect JSON first (Your robust logic)
+    const jsonCandidate = tryParseJSON(inputText);
+
+    if (jsonCandidate !== null) {
+        // If it's valid JSON, we MUST treat the input as JSON.
+        inputFormatValue = 'json';
+        parsedObject = jsonCandidate;
+    } else if (inputFormatValue === 'yaml') {
+        // If it wasn't JSON, and the user selected YAML, try parsing it as YAML.
+        try {
+            parsedObject = jsyaml.load(inputText);
+        } catch (e) {
+            outputData.value = `❌ YAML Parsing Error: ${e.message}`;
+            inputData.classList.add('error');
+            trackEvent('Conversion_Error', { conversion: 'yaml-parse', error: e.message });
+            return;
+        }
+    } 
+    
+    // 4. Handle Parsing Failure 
+    if (parsedObject === null) {
+        outputData.value = `❌ Could not parse input as ${inputFormatValue.toUpperCase()}. Please check your syntax.`;
+        inputData.classList.add('error');
+        trackEvent('Conversion_Parse_Failure', { format: inputFormatValue });
+        return;
+    }
+
+    // --- CONVERSION & OUTPUT STAGE (STEP 4) ---
+
+    let outputText = '';
     let conversionPath = `${inputFormatValue}-to-${outputFormatValue}`;
     
     try {
-        if (conversionPath === 'json-to-yaml') {
-            // Note: The js-yaml library is used for both conversion functions.
-            const data = JSON.parse(input);
-            output = jsyaml.dump(data);
+        if (outputFormatValue === 'yaml') {
+            // Convert JS object to YAML string
+            outputText = jsyaml.dump(parsedObject);
 
-        } else if (conversionPath === 'yaml-to-json') {
-            const data = jsyaml.load(input); // Use js-yaml's load for YAML input
-            output = JSON.stringify(data, null, 2); // Use JSON.stringify for JSON output
+        } else if (outputFormatValue === 'json') {
+            // Convert JS object back to JSON string (formatted with 2-space indentation)
+            outputText = JSON.stringify(parsedObject, null, 2); 
+        } 
+        
+        outputData.value = outputText;
+        trackEvent('Conversion_Success', { path: conversionPath });
 
-        } else {
-            // Should not happen with current options, but good for safety
-            output = `Error: Unsupported conversion path (${conversionPath}).`;
-        }
-
-        outputData.value = output;
 
     } catch (e) {
-        // 4. Handle conversion errors (e.g., invalid JSON/YAML syntax)
-        outputData.value = `Error: Invalid ${inputFormatValue.toUpperCase()} format.\n\nDetails: ${e.message}`;
+        // Handle conversion errors 
+        outputData.value = `Error during final conversion to ${outputFormatValue.toUpperCase()}.\n\nDetails: ${e.message}`;
         outputData.classList.add('error');
     }
 }
 
-// --- 5. Bulk Conversion Logic (Pro Tier) ---
+// --- 4. Bulk Conversion Logic (Pro Tier) ---
+// Your existing, excellent bulk logic is retained here.
 
 /**
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
     bulkMessage.textContent = '🛑 PRO FEATURE REQUIRED 🛑\n\nBulk ZIP conversion requires a Pro subscription.';
-    bulkMessage.classList.add('error');
+    // NOTE: We don't use .error class as that is for single-file conversion input error.
+    bulkMessage.style.color = '#D32F2F'; 
     
     // Log the monetization attempt before returning
     trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK' });
@@ -129,7 +162,9 @@ async function handleBulkConversion() {
     // CRITICAL: Stop the function before it hits the file selection/API call
     return;
 
-    bulkMessage.textContent = ''; // Clear previous messages
+    // --- The below logic is the functional, but currently gated, Pro conversion code ---
+    /*
+    bulkMessage.textContent = ''; 
     const files = bulkFileInput.files;
     
     if (files.length === 0) {
@@ -146,12 +181,11 @@ async function handleBulkConversion() {
     const formData = new FormData();
     formData.append('zip_file', zipFile);
     
-    // Add tracking for the conversion attempt
-    trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: conversionDirection });
+    trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK_API_CALL' });
 
-    // Set UI state for loading
     bulkConvertButton.disabled = true;
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
+    bulkMessage.style.color = '#FFD700'; // Yellow/Processing color
     
     try {
         const response = await fetch(BULK_API_URL, {
@@ -160,63 +194,52 @@ async function handleBulkConversion() {
         });
 
         if (response.ok) {
-            // 1. Get the converted file as a Blob
             const blob = await response.blob();
-
-            // 2. Create a temporary URL for the Blob
             const url = window.URL.createObjectURL(blob);
-            
-            // 3. Create a temporary link element
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'dataxlator_converted_files.zip'; // Set the download filename
+            a.download = 'dataxlator_converted_files.zip'; 
             
-            // 4. Programmatically click the link to start the download
             document.body.appendChild(a);
             a.click();
             
-            // 5. Cleanup
-            window.URL.revokeObjectURL(url); // Clean up the temporary URL
-            document.body.removeChild(a); // Remove the temporary link
+            window.URL.revokeObjectURL(url); 
+            document.body.removeChild(a); 
             bulkMessage.textContent = 'Download started successfully!';
+            bulkMessage.style.color = '#4CAF50'; // Green/Success color
             bulkFileInput.value = null; // Clear file input
 
         } else {
-            // 6. Handle API Errors (e.g., file too large, zero valid files)
             const errorText = await response.text();
             let errorMessage = `API Error (${response.status}): ${errorText}`;
             
             try {
-                // Try to parse JSON error from Python server
                 const errorJson = JSON.parse(errorText);
                 errorMessage = `API Error: ${errorJson.error || 'Unknown Server Error'}`;
             } catch (e) {
-                // Keep the raw text if parsing fails
+                // keep raw text
             }
 
             bulkMessage.textContent = `❌ ${errorMessage}`;
+            bulkMessage.style.color = '#D32F2F'; // Red/Error color
         }
 
     } catch (error) {
-        // 7. Handle Network or CORS Errors
         console.error('Network or Fetch Error:', error);
         bulkMessage.textContent = `❌ Connection Error. Is the backend server running at ${BULK_API_URL}?`;
+        bulkMessage.style.color = '#D32F2F';
     } finally {
         bulkConvertButton.disabled = false;
     }
+    */
 }
 
 // --- 5. Event Listeners ---
 
 // Single-File Feature Listeners
-// These are attached to the core elements in the "Free Converter" tab
 executeConvertButton.addEventListener('click', translateData);
-inputData.addEventListener('input', translateData);
-
-// CRITICAL FIX: Conversion should run whenever a format is selected.
-// NOTE: These variables must be defined in the app.js file (inputFormat, outputFormat)
-//const inputFormat = document.getElementById('input-format');
-//const outputFormat = document.getElementById('output-format');
+// Using 'input' event for real-time conversion
+inputData.addEventListener('input', translateData); 
 inputFormat.addEventListener('change', translateData);
 outputFormat.addEventListener('change', translateData);
 
