@@ -150,20 +150,18 @@ function translateData() {
 }
 
 // --- 4. Bulk Conversion Logic (Pro Tier) ---
-// Your existing, excellent bulk logic is retained here.
 
 /**
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
-    if (!isProUser()) { // NEW CHECK
-        bulkMessage.textContent = '🛑 PRO FEATURE REQUIRED 🛑\n\nBulk ZIP conversion requires a Pro subscription.';
-        // NOTE: We don't use .error class as that is for single-file conversion input error.
-        bulkMessage.style.color = '#D32F2F';
-        // Log the monetization attempt before returning
-        trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK' });
-        // CRITICAL: Stop the function before it hits the file selection/API call
-        return;
+    if (!isProUser()) {
+        // 1. Disable the button
+        bulkConvertButton.disabled = true;
+        
+        // 2. Set a clear message
+        bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Upgrade to unlock.';
+        bulkMessage.style.color = '#999'; 
     }
     
     bulkMessage.textContent = ''; 
@@ -246,3 +244,7 @@ outputFormat.addEventListener('change', translateData);
 
 // Pro Feature Listener (inside the "Pro Features" tab)
 bulkConvertButton.addEventListener('click', handleBulkConversion);
+
+// Run the Pro User check when the entire page is loaded
+document.addEventListener('DOMContentLoaded', handleBulkConversion);
+// You should also call this function after a successful payment
