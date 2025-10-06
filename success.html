@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DataXLator™ - Pro Access Activated</title>
+</head>
+<body style="font-family: sans-serif; text-align: center; padding: 50px;">
+    <h1>🎉 DataXLator Pro Unlocked!</h1>
+    <p>Your subscription is active. We are securely activating your Pro features now...</p>
+    
+    <script>
+        // 1. Set the permanent Pro flag in Local Storage
+        localStorage.setItem('dataxlator_pro_status', 'active');
+        
+        // 2. Redirect the user back to the main app
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 10000); // Redirect after 10 seconds
+    </script>
+
+    <p style="margin-top: 20px;">Redirecting you to the converter in 10 seconds...</p>
+    <a href="index.html">Click here if you are not redirected</a>
+</body>
+</html>
