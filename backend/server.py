@@ -3,6 +3,7 @@ import json
 import zipfile
 import yaml
 import csv
+from collections import OrderedDict # New import for guaranteed key order
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS 
 from werkzeug.datastructures import FileStorage
@@ -10,72 +11,98 @@ from werkzeug.datastructures import FileStorage
 app = Flask(__name__)
 
 # Enable CORS explicitly for production deployment
-# This allows your GitHub Pages frontend (kcreed713.github.io) to talk to the Render backend.
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 # --- Configuration ---
 # Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
+# --- Custom Dumper for YAML (Fixes Sorting) ---
+# NOTE: The explicit use of OrderedDict below makes this custom dumper largely redundant, 
+# but we keep the structure clean for compatibility. We still need to register it.
+class NoAliasSafeDumper(yaml.SafeDumper):
+    """Custom YAML Dumper to prevent aliases and preserve dictionary key order."""
+    pass
+
+# FIX 1: Register a function to represent standard Python dicts AND OrderedDict.
+def dict_representer(dumper, data):
+    # This represents the dictionary keys in the order they are iterated (insertion order for OrderedDict/modern dict)
+    return dumper.represent_mapping('tag:yaml.org,2002:map', data.items())
+
+NoAliasSafeDumper.add_representer(dict, dict_representer)
+NoAliasSafeDumper.add_representer(OrderedDict, dict_representer)
+
+
 # --- Helper Functions for Conversion ---
 
 def json_to_yaml(data_str):
-    """Converts a JSON string to a YAML string."""
-    data = json.loads(data_str)
-    return yaml.safe_dump(data, default_flow_style=False)
+    """Converts a JSON string to a YAML string, preserving key order."""
+    # FIX 1: Use object_pairs_hook=OrderedDict to load JSON with guaranteed order
+    data = json.loads(data_str, object_pairs_hook=OrderedDict)
+    # Use the custom Dumper class. The OrderedDict and the custom Dumper registration 
+    # handle order preservation, so we remove the potentially conflicting sort_keys=False argument.
+    return yaml.dump(data, Dumper=NoAliasSafeDumper, default_flow_style=False)
 
 def yaml_to_json(data_str):
     """Converts a YAML string to a JSON string (formatted with 2 spaces)."""
     data = yaml.safe_load(data_str)
     return json.dumps(data, indent=2)
 
-def json_to_sql_insert(json_data_str, table_name="dataxlator_records"):
+def json_to_sql_insert(json_data_str, table_name="your_table"):
     """
-    Converts a JSON array of objects to SQL INSERT statements.
-    Uses backticks (`) for column and table names for safety.
+    Converts a JSON string (can be a single object or an array of objects) 
+    to SQL INSERT statements. Handles nested objects/arrays and single records.
     """
-    data = json.loads(json_data_str)
+    # FIX 2: Use OrderedDict for robust parsing of single records
+    data = json.loads(json_data_str, object_pairs_hook=OrderedDict)
     
-    # Ensure data is an array of objects for SQL conversion
+    # FIX 2: If data is a dictionary (single record), wrap it in a list.
+    # This handles both standard dicts and OrderedDicts used during parsing.
+    if isinstance(data, dict):
+        data = [data]
+    
+    # Check if we have a non-empty list of records
     if not isinstance(data, list) or not data:
-        raise ValueError("JSON data must be a non-empty array of objects for SQL conversion.")
+        raise ValueError("JSON data must be a non-empty object or array of objects.")
+    
+    # Check for empty record (e.g., if input was [{}])
+    if not data[0].keys():
+         raise ValueError("JSON record is empty and cannot be converted to SQL columns.")
         
     columns = data[0].keys()
-    # Use backticks for column names (e.g., `column_name`)
-    columns_str = ", ".join([f"`{col}`" for col in columns])
+    # The columns are now guaranteed to be in the original insertion order
+    columns_str = ", ".join([f"`{c}`" for c in columns])
     
     sql_statements = []
     
     for row in data:
         values = []
+        # row is now an OrderedDict, so iteration order is correct
         for col in columns:
             value = row.get(col)
             if isinstance(value, str):
-                # Escape single quotes and wrap in single quotes
+                # Handle simple strings: escape single quotes and wrap in SQL quotes
                 values.append(f"'{value.replace('\'', '\'\'')}'") 
+            elif isinstance(value, (dict, list)):
+                # Handle nested objects/arrays by stringifying them into JSON before SQL
+                json_value = json.dumps(value)
+                values.append(f"'{json_value.replace('\'', '\'\'')}'")
             elif value is None:
                 values.append('NULL')
             else:
-                values.append(str(value)) # Numbers, Booleans (e.g., 1/0)
+                values.append(str(value))
         
         values_str = ", ".join(values)
-        # Use backticks for table name (e.g., `table_name`)
         sql = f"INSERT INTO `{table_name}` ({columns_str}) VALUES ({values_str});"
         sql_statements.append(sql)
         
     return "\n".join(sql_statements)
 
 def csv_to_json(data_str):
-    """Converts CSV string to a JSON array of objects (as a formatted string)."""
+    """Converts CSV string to a JSON array of objects."""
     f = io.StringIO(data_str)
-    # DictReader automatically uses the first row as headers/keys
     reader = csv.DictReader(f)
     json_data = list(reader)
-    
-    # Check if any records were actually read
-    if not json_data:
-        raise ValueError("CSV contained headers but no data records.")
-        
     return json.dumps(json_data, indent=2)
 
 # --- Main API Route for Bulk Conversion (The Monetized Feature) ---
@@ -84,7 +111,6 @@ def csv_to_json(data_str):
 def bulk_convert():
     """
     Handles bulk conversion of files contained within an uploaded ZIP file.
-    It attempts multiple conversion paths for high-value formats (JSON, CSV).
     """
     if 'zip_file' not in request.files:
         return jsonify({"error": "No ZIP file part in the request."}), 400
@@ -104,81 +130,95 @@ def bulk_convert():
             with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as output_zip:
                 
                 for filename in input_zip.namelist():
-                    if filename.endswith('/') or filename.startswith('__MACOSX'):
+                    if filename.endswith('/'):
                         continue
                     
-                    file_count += 1
-                    lower_filename = filename.lower()
-                    
+                    converted_content = None
+                    converted_content_sql = None
+                    new_filename = None
+                    new_filename_sql = None
+                    convert_type = None
+
                     try:
                         with input_zip.open(filename) as file:
-                            # Read content as UTF-8
                             content = file.read().decode('utf-8')
                             
-                            # Dictionary to hold all successful conversions for the current file
-                            conversions = {} 
+                            file_count += 1
+                            
+                            lower_filename = filename.lower()
                             
                             # --- Conversion Logic ---
                             if lower_filename.endswith(('.json')):
-                                # 1. JSON -> YAML
-                                conversions[filename.replace('.json', '.yaml')] = json_to_yaml(content)
+                                # JSON -> YAML conversion (Primary conversion)
+                                converted_content = json_to_yaml(content)
+                                new_filename = filename.replace('.json', '.yaml')
+                                convert_type = 'JSON_TO_YAML'
                                 
-                                # 2. JSON -> SQL (requires array of objects structure)
+                                # JSON -> SQL conversion (Secondary conversion)
                                 try:
-                                    conversions[filename.replace('.json', '.sql')] = json_to_sql_insert(content)
-                                except ValueError as e:
-                                    conversions[f"{filename.replace('.json', '')}_SQL_ERROR.txt"] = \
-                                        f"Skipped JSON to SQL conversion: {str(e)}"
-                                
+                                    converted_content_sql = json_to_sql_insert(content)
+                                    new_filename_sql = filename.replace('.json', '.sql')
+                                except Exception as sql_e:
+                                    # This should only skip if the JSON is a primitive (not object/array)
+                                    print(f"Skipped JSON to SQL conversion for {filename}: {str(sql_e)}")
+                                    pass
+
                             elif lower_filename.endswith(('.yaml', '.yml')):
-                                # 1. YAML -> JSON
+                                # YAML to JSON conversion
+                                converted_content = yaml_to_json(content)
                                 new_filename = filename.replace('.yaml', '.json').replace('.yml', '.json')
-                                conversions[new_filename] = yaml_to_json(content)
+                                convert_type = 'YAML_TO_JSON'
 
                             elif lower_filename.endswith(('.csv')):
-                                # 1. CSV -> JSON (intermediate step)
+                                # CSV to JSON conversion (Primary conversion)
                                 json_content = csv_to_json(content)
-                                conversions[filename.replace('.csv', '.json')] = json_content
+                                converted_content = json_content
+                                new_filename = filename.replace('.csv', '.json')
+                                convert_type = 'CSV_TO_JSON'
                                 
-                                # 2. CSV -> SQL (uses the intermediate JSON content)
+                                # CSV to SQL conversion (Secondary conversion)
                                 try:
-                                    conversions[filename.replace('.csv', '.sql')] = json_to_sql_insert(json_content)
-                                except Exception as e:
-                                    conversions[f"{filename.replace('.csv', '')}_SQL_ERROR.txt"] = \
-                                        f"Skipped CSV to SQL conversion: SQL generation failed after JSON conversion: {str(e)}"
+                                    converted_content_sql = json_to_sql_insert(json_content)
+                                    new_filename_sql = filename.replace('.csv', '.sql')
+                                except Exception as sql_e:
+                                     print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
+                                     pass
+                            # --- End Conversion Logic ---
                             
-                            # Write all generated conversions to the output ZIP
-                            if conversions:
-                                for new_filename, converted_content in conversions.items():
-                                    output_zip.writestr(new_filename, converted_content.encode('utf-8'))
-                            else:
-                                # Write a skip file if the format was unrecognized
-                                output_zip.writestr(f"{filename}_SKIP.txt", f"No conversion path found for file type: {lower_filename.split('.')[-1]}".encode('utf-8'))
-                                
                     except Exception as e:
-                        # Catch file-specific errors (e.g., decoding, parsing)
-                        error_message = f"ERROR processing {filename}: {str(e)}"
+                        # Write an error file instead of crashing the batch
+                        error_message = f"ERROR converting {filename} (Type: {convert_type or 'Unknown'}): {str(e)}"
                         print(error_message)
-                        output_zip.writestr(f"{filename}_BATCH_ERROR.txt", error_message.encode('utf-8'))
+                        new_filename = f"{filename}_ERROR.txt"
+                        converted_content = error_message
+                        
+                    # Write the primary converted or error content to the output ZIP
+                    if converted_content and new_filename:
+                        output_zip.writestr(new_filename, converted_content.encode('utf-8'))
+
+                    # Write the secondary SQL content to the output ZIP, if generated
+                    if converted_content_sql and new_filename_sql:
+                         output_zip.writestr(new_filename_sql, converted_content_sql.encode('utf-8'))
+
 
                 if file_count == 0:
-                    return jsonify({"error": "ZIP file contained no recognizable files."}), 400
+                    return jsonify({"error": "ZIP file contained no recognizable files (.json, .yaml, .yml, .csv)"}), 400
 
-        # Prepare buffer for response
-        output_zip_buffer.seek(0)
-        
-        # Send the new ZIP file back to the client
-        return send_file(
-            output_zip_buffer,
-            mimetype='application/zip',
-            as_attachment=True,
-            download_name='dataxlator_converted_files.zip'
-        )
+            # Prepare buffer for response
+            output_zip_buffer.seek(0)
+            
+            # Send the new ZIP file back to the client
+            return send_file(
+                output_zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name='dataxlator_converted_files.zip'
+            )
 
     except zipfile.BadZipFile:
         return jsonify({"error": "The uploaded file is not a valid ZIP archive."}), 400
     except Exception as e:
-        print(f"Critical server-side error during bulk conversion: {e}")
+        print(f"Server-side error during bulk conversion: {e}")
         return jsonify({"error": "An internal server error occurred during processing."}), 500
 
 if __name__ == '__main__':
