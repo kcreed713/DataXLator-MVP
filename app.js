@@ -52,8 +52,17 @@ function csvToJSON(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length <= 1) return [];
 
+    // FIX START: Stricter check for CSV format by verifying the header row contains a comma.
+    const headerLine = lines[0];
+    if (!headerLine.includes(',')) {
+        // If the header row doesn't contain a comma, it's likely not CSV and we return an empty array 
+        // to trigger the parsing failure error message in translateData.
+        return []; 
+    }
+    // FIX END
+
     // Extract headers (first line) and sanitize them (trim, remove quotes)
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^['"]|['"]$/g, ''));
+    const headers = headerLine.split(',').map(h => h.trim().replace(/^['"]|['"]$/g, ''));
     const result = [];
     
     for (let i = 1; i < lines.length; i++) {
@@ -211,6 +220,17 @@ function translateData() {
             try {
                 // jsyaml.load is expected to be available via the script tag in index.html
                 parsedObject = jsyaml.load(inputText);
+                
+                // FIX: If YAML parser returns a primitive type (like a string, which often happens 
+                // for non-YAML input like CSV), treat it as an error because we expect structured data
+                // (an object or an array) for conversion.
+                if (typeof parsedObject !== 'object' || parsedObject === null) {
+                     // Check if it's an array and empty, which is handled below, otherwise fail here
+                    if (!Array.isArray(parsedObject) || parsedObject.length !== 0) {
+                         throw new Error("Input could not be parsed as a structured YAML object or array.");
+                    }
+                }
+                
             } catch (e) {
                 outputData.value = `❌ YAML Parsing Error: ${e.message}`;
                 inputData.classList.add('error');
