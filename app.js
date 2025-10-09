@@ -97,15 +97,24 @@ function jsonToSQL(records, tableName = 'dataxlator_records') {
     const firstRecord = records[0];
     const columns = Object.keys(firstRecord);
 
-    // Helper to safely format value for SQL (e.g., wrap strings in quotes, handle NULL)
+    // Helper to safely format value for SQL
     const formatValue = (value) => {
-        if (value === null || value === undefined || value === '') {
+        if (value === null || value === undefined) {
             return 'NULL';
         }
+        
+        // FIX START: Handle complex objects and arrays by serializing to JSON string
+        if (typeof value === 'object') {
+            const jsonString = JSON.stringify(value);
+            // Escape single quotes within the JSON string and wrap the whole thing in SQL quotes
+            return `'${jsonString.replace(/'/g, "''")}'`;
+        }
+        // FIX END
+        
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value);
         }
-        // Escape single quotes and wrap strings in single quotes
+        // Handle simple strings: escape single quotes and wrap in SQL quotes
         return `'${String(value).replace(/'/g, "''")}'`;
     };
 
