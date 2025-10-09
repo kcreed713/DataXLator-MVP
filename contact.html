@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact DataXLator</title>
+    <!-- We will use Inter font as established in index.html -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            background-color: #1E1E1E; /* Dark Charcoal */
+            color: #D4D4D4; /* Light Gray Text */
+            min-height: 100vh;
+            text-align: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #252525; /* Tab Content Background */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            color: #007ACC;
+            margin-bottom: 5px;
+            font-size: 2.5em;
+        }
+
+        p {
+            margin-bottom: 25px;
+            color: #999;
+            font-size: 1.1em;
+        }
+
+        .contact-group {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #2D2D2D;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .contact-item a {
+            color: #007ACC;
+            text-decoration: none;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        .contact-item a:hover {
+            color: #4CAF50;
+        }
+
+        /* Icon Styling */
+        .icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            fill: #D4D4D4;
+            transition: fill 0.2s;
+        }
+
+        .contact-item a:hover .icon {
+            fill: #4CAF50;
+        }
+
+        /* Back Button Styling */
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 10px 25px;
+            background-color: #3C3C3C;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        .back-link:hover {
+            background-color: #555555;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+            p {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Get in Touch</h1>
+        <p>Questions, feedback, or support? We'd love to hear from you.</p>
+
+        <div class="contact-group">
+            <!-- Email -->
+            <div class="contact-item">
+                <a href="mailto:dataxlatorsaas@gmail.com">
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path
+                            d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                    </svg>
+                    dataxlatorsaas@gmail.com
+                </a>
+            </div>
+
+            <!-- LinkedIn Profile -->
+            <div class="contact-item">
+                <a href="https://www.linkedin.com/in/kcreed713" target="_blank"
+                    title="Connect on LinkedIn">
+                    <!-- LinkedIn Logo (Inline SVG) -->
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path
+                            d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.529-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.756 7 2.456v6.779z" />
+                    </svg>
+                    kcreed713 on LinkedIn
+                </a>
+            </div>
+
+            <!-- X/Twitter Profile -->
+            <div class="contact-item">
+                <a href="https://x.com/kcreed713" target="_blank" title="Follow on X">
+                    <!-- X Logo (Inline SVG - stylized) -->
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path
+                            d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.88L4.11 22.75H.807l7.5-9.29L.15 2.25H8.04l4.713 6.236L18.244 2.25zm-2.91 16.59L17.5 4.67H19.78L13.88 11.75 6.07 19.88l-1.46 1.93h2.8l4.41-5.83 5.4 7.14z" />
+                    </svg>
+                    @kcreed713 on X
+                </a>
+            </div>
+        </div>
+        
+        <a href="index.html" class="back-link">← Back to Converter</a>
+    </div>
+
+</body>
+
+</html>
