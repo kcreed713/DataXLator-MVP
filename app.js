@@ -38,6 +38,92 @@ function isProUser() {
     return localStorage.getItem('dataxlator_pro_status') === 'active';
 }
 
+// --- CORE CONVERSION HELPERS (PRO FEATURES) ---
+
+/**
+ * Converts CSV text into a JSON Array of objects.
+ * Assumes the first line is the header row.
+ * @param {string} csvText The raw CSV string.
+ * @returns {Array} An array of objects representing the data.
+ */
+function csvToJSON(csvText) {
+    // Simple implementation: split by newline and comma. 
+    // This is not robust against quoted commas or newlines, but works for clean CSV.
+    const lines = csvText.trim().split('\n');
+    if (lines.length <= 1) return [];
+
+    // Extract headers (first line) and sanitize them (trim, remove quotes)
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^['"]|['"]$/g, ''));
+    const result = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') continue;
+
+        const values = lines[i].split(','); 
+        const obj = {};
+        for (let j = 0; j < headers.length; j++) {
+            const value = values[j] ? values[j].trim().replace(/^['"]|['"]$/g, '') : ''; 
+            
+            // Simple type coercion
+            if (!isNaN(value) && value.trim() !== '') {
+                obj[headers[j]] = Number(value);
+            } else if (value.toLowerCase() === 'true') {
+                obj[headers[j]] = true;
+            } else if (value.toLowerCase() === 'false') {
+                obj[headers[j]] = false;
+            } else {
+                obj[headers[j]] = value;
+            }
+        }
+        result.push(obj);
+    }
+    return result;
+}
+
+
+/**
+ * Converts a JSON Array of records into SQL INSERT statements.
+ * @param {Array} records An array of flat JavaScript objects (records).
+ * @param {string} tableName The SQL table name to use in the statement.
+ * @returns {string} The concatenated SQL INSERT statements.
+ */
+function jsonToSQL(records, tableName = 'dataxlator_records') {
+    // Ensure we have an array of objects to work with
+    if (!Array.isArray(records) || records.length === 0) {
+        return `/* No valid records found for SQL conversion. */`;
+    }
+
+    // Use the keys of the first record as column names
+    const firstRecord = records[0];
+    const columns = Object.keys(firstRecord);
+
+    // Helper to safely format value for SQL (e.g., wrap strings in quotes, handle NULL)
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return 'NULL';
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        // Escape single quotes and wrap strings in single quotes
+        return `'${String(value).replace(/'/g, "''")}'`;
+    };
+
+    // Prepare column list (e.g., `col1`, `col2`)
+    const columnList = columns.map(col => `\`${col}\``).join(', ');
+    let sqlStatements = [`-- Generated SQL INSERT statements for table: ${tableName}\n`];
+
+    // Generate an INSERT statement for each record
+    records.forEach(record => {
+        const values = columns.map(col => formatValue(record[col]));
+        sqlStatements.push(
+            `INSERT INTO \`${tableName}\` (${columnList}) VALUES (${values.join(', ')});`
+        );
+    });
+
+    return sqlStatements.join('\n');
+}
+
 // --- 4. Core Conversion Logic (Free Tier) ---
 
 /**
@@ -50,8 +136,6 @@ function tryParseJSON(str) {
         return null;
     }
     try {
-        // NOTE: JSON.parse can return primitives. We return the result to ensure
-        // the object is passed, even if it's a primitive, for conversion purposes.
         return JSON.parse(str);
     } catch (e) {
         return null;
@@ -76,7 +160,7 @@ function translateData() {
         return; // Do nothing if input is empty
     }
     
-    // 2. NEW: Prevent conversion to the same format (UX Improvement)
+    // 2. Prevent conversion to the same format (UX Improvement)
     if (inputFormatValue === outputFormatValue) {
         outputData.value = '❌ Input and Output formats are the same. Please select different formats.';
         inputData.classList.add('error');
@@ -96,28 +180,40 @@ function translateData() {
 
     // --- CORE LOGIC (PARSING/INPUT STAGE) ---
     
-    // Attempt 1: Auto-detect JSON first (Your robust logic)
-    const jsonCandidate = tryParseJSON(inputText);
-
-    if (jsonCandidate !== null) {
-        // If it's valid JSON, we MUST treat the input as JSON.
-        inputFormatValue = 'json';
-        parsedObject = jsonCandidate;
-    } else if (inputFormatValue === 'yaml') {
-        // If it wasn't JSON, and the user selected YAML, try parsing it as YAML.
+    if (inputFormatValue === 'csv') {
+        // PRO: Convert CSV to a standard JavaScript Array of Objects
         try {
-            parsedObject = jsyaml.load(inputText);
+            parsedObject = csvToJSON(inputText);
         } catch (e) {
-            outputData.value = `❌ YAML Parsing Error: ${e.message}`;
+            outputData.value = `❌ CSV Parsing Error: ${e.message}`;
             inputData.classList.add('error');
-            trackEvent('Conversion_Error', { conversion: 'yaml-parse', error: e.message });
             return;
         }
-    } 
+    } else {
+        // Attempt 1: Auto-detect JSON first (Existing robust logic)
+        const jsonCandidate = tryParseJSON(inputText);
+
+        if (jsonCandidate !== null) {
+            // If it's valid JSON, we MUST treat the input as JSON.
+            inputFormatValue = 'json';
+            parsedObject = jsonCandidate;
+        } else if (inputFormatValue === 'yaml') {
+            // If it wasn't JSON, and the user selected YAML, try parsing it as YAML.
+            try {
+                // jsyaml.load is expected to be available via the script tag in index.html
+                parsedObject = jsyaml.load(inputText);
+            } catch (e) {
+                outputData.value = `❌ YAML Parsing Error: ${e.message}`;
+                inputData.classList.add('error');
+                trackEvent('Conversion_Error', { conversion: 'yaml-parse', error: e.message });
+                return;
+            }
+        } 
+    }
     
     // 4. Handle Parsing Failure 
-    if (parsedObject === null) {
-        outputData.value = `❌ Could not parse input as ${inputFormatValue.toUpperCase()}. Please check your syntax.`;
+    if (parsedObject === null || (Array.isArray(parsedObject) && parsedObject.length === 0)) {
+        outputData.value = `❌ Could not parse input as ${inputFormatValue.toUpperCase()}. Please check your syntax/structure.`;
         inputData.classList.add('error');
         trackEvent('Conversion_Parse_Failure', { format: inputFormatValue });
         return;
@@ -129,7 +225,13 @@ function translateData() {
     let conversionPath = `${inputFormatValue}-to-${outputFormatValue}`;
     
     try {
-        if (outputFormatValue === 'yaml') {
+        if (outputFormatValue === 'sql') {
+            // PRO: Convert parsed object (expected to be an Array of Objects from CSV/JSON) to SQL.
+            // If the input was JSON but not an array, wrap it to handle single-record JSON.
+            const records = Array.isArray(parsedObject) ? parsedObject : [parsedObject];
+            outputText = jsonToSQL(records);
+
+        } else if (outputFormatValue === 'yaml') {
             // Convert JS object to YAML string
             outputText = jsyaml.dump(parsedObject);
 
@@ -149,7 +251,7 @@ function translateData() {
     }
 }
 
-// --- 4. Bulk Conversion Logic (Pro Tier) ---
+// --- 5. Bulk Conversion Logic (Pro Tier) ---
 
 /**
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
@@ -162,6 +264,7 @@ async function handleBulkConversion() {
         // 2. Set a clear message
         bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Upgrade to unlock.';
         bulkMessage.style.color = '#999'; 
+        return; // Exit early if not Pro
     }
     
     bulkMessage.textContent = ''; 
@@ -230,10 +333,10 @@ async function handleBulkConversion() {
         bulkMessage.style.color = '#D32F2F';
     } finally {
         bulkConvertButton.disabled = false;
-    }    
+    } 
 }
 
-// --- 5. Event Listeners ---
+// --- 6. Event Listeners ---
 
 // Single-File Feature Listeners
 executeConvertButton.addEventListener('click', translateData);
