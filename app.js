@@ -1,6 +1,66 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
 // --- Configuration ---
 // IMPORTANT: This URL has been updated to your Render deployment.
 const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert'; 
+
+// --- GLOBAL FIREBASE INSTANCES & STATE ---
+let db = null;
+let auth = null;
+let userId = null;
+let isAuthReady = false;
+
+// Set Firestore log level to Debug for visibility in the console
+setLogLevel('debug'); 
+
+/**
+ * Initializes Firebase and authenticates the user anonymously for production use.
+ * NOTE: Replace placeholder config with your actual production keys.
+ */
+async function initFirebase() {
+    console.log("Initializing Firebase for Production...");
+
+    // IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR ACTUAL FIREBASE CONFIG OBJECT
+    const firebaseConfig = {
+        apiKey: "AIzaSyBdIrcFJGnsPh04bHcLJ6ef1pUDWR3ZXXw",
+        authDomain: "dataxlator.firebaseapp.com",
+        projectId: "dataxlator",
+        storageBucket: "dataxlator.firebasestorage.app",
+        messagingSenderId: "496498133573",
+        appId: "1:496498133573:web:c33b441097afa8db72312c"
+    };
+    
+    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+        console.error("FIREBASE ERROR: Please replace the placeholder firebaseConfig with your actual production keys from the Firebase Console.");
+    }
+
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    try {
+        // Sign in anonymously to get a unique user ID for secure Firestore writes
+        await signInAnonymously(auth);
+    } catch (error) {
+        console.error("Firebase Anonymous Authentication failed:", error);
+    }
+    
+    // Listen for auth state changes and set the user ID
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            userId = user.uid;
+            isAuthReady = true;
+            console.log(`Auth Ready. User ID: ${userId} (Source: Anonymous Auth)`);
+        } else {
+            userId = null;
+            isAuthReady = false;
+            console.log("User is signed out.");
+        }
+    });
+}
+
 
 // --- 1. DOM Element Selection ---
 const inputData = document.getElementById('input-data');
@@ -13,6 +73,11 @@ const outputFormat = document.getElementById('output-format');
 const bulkFileInput = document.getElementById('bulk-file-input');
 const bulkConvertButton = document.getElementById('bulk-convert-button');
 const bulkMessage = document.getElementById('bulk-message');
+
+// Email Capture Elements
+const emailInput = document.getElementById('pro-email-input');
+const earlyAccessButton = document.getElementById('early-access-button');
+const emailCaptureForm = document.querySelector('.email-capture-form');
 
 
 // --- 2. Analytics Tracking ---
@@ -218,7 +283,7 @@ function translateData() {
                 // Check for primitive types (like simple string from CSV)
                 if (typeof parsedObject !== 'object' || parsedObject === null) {
                     if (!Array.isArray(parsedObject) || parsedObject.length !== 0) {
-                         throw new Error("Input could not be parsed as a structured YAML object or array.");
+                        throw new Error("Input could not be parsed as a structured YAML object or array.");
                     }
                 }
                 
@@ -230,7 +295,7 @@ function translateData() {
             }
         
         } else {
-             // If user chose 'json' or 'select', attempt JSON parsing first for robustness
+            // If user chose 'json' or 'select', attempt JSON parsing first for robustness
             const jsonCandidate = tryParseJSON(inputText);
 
             if (jsonCandidate !== null) {
@@ -283,6 +348,79 @@ function translateData() {
         outputData.classList.add('error');
     }
 }
+
+
+/**
+ * Handles the click event for the 'Get Early Access' button and saves the email to Firestore.
+ */
+async function handleEarlyAccessSignup() {
+    // We access the email input and button from the global DOM selection section (1)
+    const email = emailInput ? emailInput.value.trim() : '';
+    let statusMessageElement = document.getElementById('pro-status-message'); // Dynamic element lookup
+
+    if (!statusMessageElement) {
+        console.error("Status message element not found.");
+        return;
+    }
+
+    if (!isAuthReady) {
+        statusMessageElement.textContent = "Database service not ready. Please check configuration.";
+        statusMessageElement.style.color = '#FFC107';
+        console.warn("Attempted signup before auth was ready.");
+        return;
+    }
+
+    if (!email || !email.includes('@')) {
+        statusMessageElement.textContent = "Please enter a valid email address.";
+        statusMessageElement.style.color = '#D32F2F'; // Red for error
+        return;
+    }
+
+    // Disable button to prevent double submission
+    if (earlyAccessButton) {
+        earlyAccessButton.disabled = true;
+        earlyAccessButton.textContent = 'Subscribing...';
+    }
+    
+    statusMessageElement.textContent = "Processing...";
+    statusMessageElement.style.color = '#999';
+
+    try {
+        // Production collection path: 'email_signups'
+        const emailCollectionRef = collection(db, 'email_signups');
+
+        await addDoc(emailCollectionRef, {
+            email: email,
+            timestamp: serverTimestamp(),
+            userId: userId, // The Anonymous UID
+            signup_source: 'early_access_pro_tab'
+        });
+
+        statusMessageElement.textContent = "Success! You are on the Early Access list!";
+        statusMessageElement.style.color = '#4CAF50'; // Green for success
+        if (emailInput) emailInput.value = ''; // Clear the input
+        console.log(`Email successfully captured for user ${userId}.`);
+
+    } catch (error) {
+        console.error("Error saving email to Firestore:", error);
+        statusMessageElement.textContent = "Error: Could not save your email. Check console for details.";
+        statusMessageElement.style.color = '#D32F2F'; // Red for error
+        if (earlyAccessButton) {
+            earlyAccessButton.disabled = false; // Re-enable on failure
+        }
+    } finally {
+        if (earlyAccessButton) {
+            // Only re-enable the button if signup was unsuccessful
+            if (statusMessageElement.style.color === '#D32F2F') {
+                earlyAccessButton.textContent = 'Get Early Access';
+            } else {
+                // Keep the button disabled and updated for a successful, one-time submission
+                earlyAccessButton.textContent = 'Subscribed!';
+            }
+        }
+    }
+}
+
 
 // --- 5. Bulk Conversion Logic (Pro Tier) ---
 
@@ -369,18 +507,48 @@ async function handleBulkConversion() {
     } 
 }
 
+
 // --- 6. Event Listeners ---
 
-// Single-File Feature Listeners
-executeConvertButton.addEventListener('click', translateData);
-// Using 'input' event for real-time conversion
-inputData.addEventListener('input', translateData); 
-inputFormat.addEventListener('change', translateData);
-outputFormat.addEventListener('change', translateData);
+function initDOMAndListeners() {
+    // 1. Initialize Firebase and Authentication
+    initFirebase();
+    
+    // 2. Set up event listeners for the Free Converter
+    if (executeConvertButton) {
+        executeConvertButton.addEventListener('click', translateData);
+    }
+    if (inputData) {
+        inputData.addEventListener('input', translateData); 
+    }
+    if (inputFormat) {
+        inputFormat.addEventListener('change', translateData);
+    }
+    if (outputFormat) {
+        outputFormat.addEventListener('change', translateData);
+    }
+    
+    // 3. Set up event listener for the PRO Early Access signup
+    if (earlyAccessButton) {
+        earlyAccessButton.addEventListener('click', handleEarlyAccessSignup);
+    }
 
-// Pro Feature Listener (inside the "Pro Features" tab)
-bulkConvertButton.addEventListener('click', handleBulkConversion);
+    // 4. Set up event listener for Bulk Conversion (Pro Feature)
+    if (bulkConvertButton) {
+        bulkConvertButton.addEventListener('click', handleBulkConversion);
+    }
+    // Run the Pro User check when the entire page is loaded
+    document.addEventListener('DOMContentLoaded', handleBulkConversion);
+    // You should also call this function after a successful payment
+    
+    // 5. Dynamically insert a status message container near the form for user feedback
+    if (emailCaptureForm) {
+        const statusDiv = document.createElement('div');
+        statusDiv.id = 'pro-status-message';
+        statusDiv.style.marginTop = '10px';
+        statusDiv.style.minHeight = '20px'; // Reserve space
+        emailCaptureForm.parentNode.insertBefore(statusDiv, emailCaptureForm.nextSibling);
+    }
+}
 
-// Run the Pro User check when the entire page is loaded
-document.addEventListener('DOMContentLoaded', handleBulkConversion);
-// You should also call this function after a successful payment
+document.addEventListener('DOMContentLoaded', initDOMAndListeners);
