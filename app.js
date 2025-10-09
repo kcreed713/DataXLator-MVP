@@ -208,24 +208,15 @@ function translateData() {
             return;
         }
     } else {
-        // Attempt 1: Auto-detect JSON first (Existing robust logic)
-        const jsonCandidate = tryParseJSON(inputText);
-
-        if (jsonCandidate !== null) {
-            // If it's valid JSON, we MUST treat the input as JSON.
-            inputFormatValue = 'json';
-            parsedObject = jsonCandidate;
-        } else if (inputFormatValue === 'yaml') {
-            // If it wasn't JSON, and the user selected YAML, try parsing it as YAML.
+        // FIX START: Prioritize user's explicit YAML selection
+        if (inputFormatValue === 'yaml') {
+            // User explicitly chose YAML. Try to parse as YAML.
             try {
-                // jsyaml.load is expected to be available via the script tag in index.html
+                // jsyaml.load is expected to be available
                 parsedObject = jsyaml.load(inputText);
                 
-                // FIX: If YAML parser returns a primitive type (like a string, which often happens 
-                // for non-YAML input like CSV), treat it as an error because we expect structured data
-                // (an object or an array) for conversion.
+                // Check for primitive types (like simple string from CSV)
                 if (typeof parsedObject !== 'object' || parsedObject === null) {
-                     // Check if it's an array and empty, which is handled below, otherwise fail here
                     if (!Array.isArray(parsedObject) || parsedObject.length !== 0) {
                          throw new Error("Input could not be parsed as a structured YAML object or array.");
                     }
@@ -237,7 +228,20 @@ function translateData() {
                 trackEvent('Conversion_Error', { conversion: 'yaml-parse', error: e.message });
                 return;
             }
-        } 
+        
+        } else {
+             // If user chose 'json' or 'select', attempt JSON parsing first for robustness
+            const jsonCandidate = tryParseJSON(inputText);
+
+            if (jsonCandidate !== null) {
+                // If it's valid JSON, we MUST treat the input as JSON.
+                inputFormatValue = 'json';
+                parsedObject = jsonCandidate;
+            } 
+            // If jsonCandidate is null and inputFormatValue was 'json', parsedObject remains null, 
+            // and the final failure check handles it.
+        }
+        // FIX END
     }
     
     // 4. Handle Parsing Failure 
