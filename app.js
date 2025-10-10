@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- Configuration ---
 // IMPORTANT: This URL has been updated to your Render deployment.
@@ -11,9 +11,57 @@ let db = null;
 let auth = null;
 let userId = null;
 let isAuthReady = false;
+let isPro = false; // NEW: Secure, server-managed Pro status
 
 // Set Firestore log level to Debug for visibility in the console
 setLogLevel('debug'); 
+
+/**
+ * Listens to the user's document in Firestore to check their 'proStatus'.
+ * This will update the global 'isPro' variable in real-time.
+ */
+function watchProStatus(uid) {
+    if (!db || !uid) {
+        console.error("Firestore or User ID not available for Pro status listener.");
+        return;
+    }
+
+    // Reference to the user's specific status document (e.g., users/unique-user-id)
+    const userDocRef = doc(db, 'users', uid);
+
+    // Set up real-time listener
+    onSnapshot(userDocRef, (docSnapshot) => {
+        if (docSnapshot.exists()) {
+            const data = docSnapshot.data();
+            const newProStatus = data.isPro === true; // Ensure boolean comparison
+
+            if (isPro !== newProStatus) {
+                isPro = newProStatus;
+                console.log(`Pro Status Updated: ${isPro ? 'ACTIVE' : 'INACTIVE'}`);
+                
+                // OPTIONAL: Re-run checks/re-enable Pro features if status changed
+                // This is especially important for the bulk converter button state.
+                updateUIForProStatus();
+            }
+        } else {
+            // User document doesn't exist yet, assume false, and create it.
+            isPro = false;
+            console.log("User document not found. Creating placeholder.");
+            try {
+                 setDoc(userDocRef, { 
+                    isPro: false,
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                }, { merge: true }); // Use merge: true to avoid overwriting existing fields
+            } catch (e) {
+                console.error("Failed to create user document:", e);
+            }
+        }
+    }, (error) => {
+        console.error("Firestore Pro Status Listener failed:", error);
+    });
+}
+
 
 /**
  * Initializes Firebase and authenticates the user anonymously for production use.
@@ -49,9 +97,13 @@ async function initFirebase() {
             userId = user.uid;
             isAuthReady = true;
             console.log(`Auth Ready. User ID: ${userId} (Source: Anonymous Auth)`);
+            
+            // NEW: Start listening for Pro status after user ID is available
+            watchProStatus(userId);
         } else {
             userId = null;
             isAuthReady = false;
+            isPro = false; // Reset Pro status if user signs out
             console.log("User is signed out.");
         }
     });
@@ -93,10 +145,27 @@ function trackEvent(eventName, eventData = {}) {
     }
 }
 
-// --- 3. Pro Status Check ---
+// --- 3. Pro Status Check (UPDATED) ---
 function isProUser() {
-    // Check if the 'dataxlator_pro_status' flag is set to 'active'
-    return localStorage.getItem('dataxlator_pro_status') === 'active';
+    // UPDATED: Now returns the secure, server-managed state
+    return isPro; 
+}
+
+/**
+ * Updates the UI elements (like the bulk button) based on the latest Pro status.
+ */
+function updateUIForProStatus() {
+    if (bulkConvertButton && bulkMessage) {
+        if (isPro) {
+            bulkConvertButton.disabled = false;
+            bulkMessage.textContent = 'Pro features are unlocked. Upload your ZIP file for bulk conversion.';
+            bulkMessage.style.color = '#4CAF50';
+        } else {
+            bulkConvertButton.disabled = true;
+            bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Upgrade to unlock.';
+            bulkMessage.style.color = '#999'; 
+        }
+    }
 }
 
 // --- CORE CONVERSION HELPERS (PRO FEATURES) ---
@@ -424,13 +493,10 @@ async function handleEarlyAccessSignup() {
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
+    // UPDATED: Now uses the server-verified isProUser() status
     if (!isProUser()) {
-        // 1. Disable the button
-        bulkConvertButton.disabled = true;
-        
-        // 2. Set a clear message
-        bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Upgrade to unlock.';
-        bulkMessage.style.color = '#999'; 
+        // 1. Disable the button and update message via updateUIForProStatus()
+        updateUIForProStatus();
         return; // Exit early if not Pro
     }
     
@@ -533,10 +599,7 @@ function initDOMAndListeners() {
     if (bulkConvertButton) {
         bulkConvertButton.addEventListener('click', handleBulkConversion);
     }
-    // Run the Pro User check when the entire page is loaded
-    document.addEventListener('DOMContentLoaded', handleBulkConversion);
-    // You should also call this function after a successful payment
-    
+
     // 5. Dynamically insert a status message container near the form for user feedback
     if (emailCaptureForm) {
         const statusDiv = document.createElement('div');
@@ -545,6 +608,9 @@ function initDOMAndListeners() {
         statusDiv.style.minHeight = '20px'; // Reserve space
         emailCaptureForm.parentNode.insertBefore(statusDiv, emailCaptureForm.nextSibling);
     }
+    
+    // Initial UI update based on the default false 'isPro' status
+    updateUIForProStatus();
 }
 
 document.addEventListener('DOMContentLoaded', initDOMAndListeners);
