@@ -22,7 +22,7 @@ setLogLevel('debug');
 async function initFirebase() {
     console.log("Initializing Firebase for Production...");
 
-    // IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR ACTUAL FIREBASE CONFIG OBJECT
+    // IMPORTANT: FIREBASE CONFIG OBJECT
     const firebaseConfig = {
         apiKey: "AIzaSyBdIrcFJGnsPh04bHcLJ6ef1pUDWR3ZXXw",
         authDomain: "dataxlator.firebaseapp.com",
@@ -32,10 +32,6 @@ async function initFirebase() {
         appId: "1:496498133573:web:c33b441097afa8db72312c"
     };
     
-    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.error("FIREBASE ERROR: Please replace the placeholder firebaseConfig with your actual production keys from the Firebase Console.");
-    }
-
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
