@@ -30,17 +30,17 @@
         <!--Schema Markup for Search Engine Optimization (SEO)-->
         <script type="application/ld+json">
             {
-              "@context": "https://schema.org",
-              "@type": "SoftwareApplication",
-              "name": "DataXLator",
-              "applicationCategory": "DeveloperTool",
-              "offers": {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "USD"
-              },
-              "url": "https://kcreed713.github.io/DataXLator-MVP/index.html",
-              "description": "Universal data conversion tool for JSON, YAML, CSV, and SQL. Features free single-file conversion and Pro bulk processing."
+                "@context": "https://schema.org",
+                "@type": "SoftwareApplication",
+                "name": "DataXLator",
+                "applicationCategory": "DeveloperTool",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "USD"
+                },
+                "url": "https://kcreed713.github.io/DataXLator-MVP/index.html",
+                "description": "Universal data conversion tool for JSON, YAML, CSV, and SQL. Features free single-file conversion and Pro bulk processing."
             }
         </script>
 
@@ -274,14 +274,29 @@
                 margin-top: 10px;
             }
 
-            .pricing-buttons-row button {
+            /* NEW: Styling for the Anchor Tags (Links) to look like buttons */
+            .pricing-link-button {
+                /* Adopted from previous button style */
                 margin: 0 15px;
                 background-color: #D32F2F;
+                /* RED accent for pricing */
                 color: white;
                 padding: 10px 20px;
                 font-size: 1em;
                 width: 200px;
                 flex-shrink: 0;
+                border-radius: 6px;
+                text-decoration: none; /* Crucial for links */
+                font-weight: bold;
+                cursor: pointer;
+                transition: background-color 0.2s, transform 0.1s;
+                text-align: center;
+                /* Centers the text inside the link-button */
+            }
+
+            .pricing-link-button:hover {
+                background-color: #B71C1C;
+                transform: translateY(-1px);
             }
 
             .or-text {
@@ -479,17 +494,18 @@
                 <p>Unlock Pro Features:</p>
 
                 <div class="pricing-buttons-row">
-                    <button id="monthly-pro-button"
-                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'monthly' }); window.open('https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00', '_blank')"
+                    <!-- FIX: Changed from <button onclick="window.open(...)"> to <a href="..." target="_blank"> -->
+                    <a id="monthly-pro-button" class="pricing-link-button"
+                        href="https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00" target="_blank"
                         title="Start a recurring monthly subscription">
                         Pro Monthly: $7/mo
-                    </button>
+                    </a>
                     <span class="or-text">OR</span>
-                    <button id="lifetime-pro-button"
-                        onclick="trackEvent('CTA_Click_Upgrade_Button', { type: 'lifetime' }); window.open('https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01', '_blank')"
+                    <a id="lifetime-pro-button" class="pricing-link-button"
+                        href="https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01" target="_blank"
                         title="Get access forever with a single payment">
                         Lifetime Access: $29
-                    </button>
+                    </a>
                 </div>
 
                 <p class="urgent-text">Limited Time Introductory Offer!</p>
