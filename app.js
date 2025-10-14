@@ -1,76 +1,30 @@
+// --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- Configuration ---
-// IMPORTANT: This URL has been updated to your Render deployment.
-const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert'; 
+// IMPORTANT: This URL is the Render deployment.
+const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
 
 // --- GLOBAL FIREBASE INSTANCES & STATE ---
 let db = null;
 let auth = null;
 let userId = null;
 let isAuthReady = false;
-let isPro = false; // NEW: Secure, server-managed Pro status
+let isPro = false; // Secure, server-managed Pro status
 
 // Set Firestore log level to Debug for visibility in the console
-setLogLevel('debug'); 
-
-/**
- * Listens to the user's document in Firestore to check their 'proStatus'.
- * This will update the global 'isPro' variable in real-time.
- */
-function watchProStatus(uid) {
-    if (!db || !uid) {
-        console.error("Firestore or User ID not available for Pro status listener.");
-        return;
-    }
-
-    // Reference to the user's specific status document (e.g., users/unique-user-id)
-    const userDocRef = doc(db, 'users', uid);
-
-    // Set up real-time listener
-    onSnapshot(userDocRef, (docSnapshot) => {
-        if (docSnapshot.exists()) {
-            const data = docSnapshot.data();
-            const newProStatus = data.isPro === true; // Ensure boolean comparison
-
-            if (isPro !== newProStatus) {
-                isPro = newProStatus;
-                console.log(`Pro Status Updated: ${isPro ? 'ACTIVE' : 'INACTIVE'}`);
-                
-                // OPTIONAL: Re-run checks/re-enable Pro features if status changed
-                // This is especially important for the bulk converter button state.
-                updateUIForProStatus();
-            }
-        } else {
-            // User document doesn't exist yet, assume false, and create it.
-            isPro = false;
-            console.log("User document not found. Creating placeholder.");
-            try {
-                 setDoc(userDocRef, { 
-                    isPro: false,
-                    createdAt: serverTimestamp(),
-                    lastLogin: serverTimestamp(),
-                }, { merge: true }); // Use merge: true to avoid overwriting existing fields
-            } catch (e) {
-                console.error("Failed to create user document:", e);
-            }
-        }
-    }, (error) => {
-        console.error("Firestore Pro Status Listener failed:", error);
-    });
-}
-
+setLogLevel('debug');
 
 /**
  * Initializes Firebase and authenticates the user anonymously for production use.
- * NOTE: Replace placeholder config with your actual production keys.
+ * NOTE: User MUST replace the placeholder config with their actual production keys.
  */
 async function initFirebase() {
     console.log("Initializing Firebase for Production...");
 
-    // IMPORTANT: FIREBASE CONFIG OBJECT
+    // IMPORTANT: REPLACE THESE PLACEHOLDERS WITH YOUR PRODUCTION FIREBASE CONFIG
     const firebaseConfig = {
         apiKey: "AIzaSyBdIrcFJGnsPh04bHcLJ6ef1pUDWR3ZXXw",
         authDomain: "dataxlator.firebaseapp.com",
@@ -87,6 +41,7 @@ async function initFirebase() {
     try {
         // Sign in anonymously to get a unique user ID for secure Firestore writes
         await signInAnonymously(auth);
+        console.log("Signed in anonymously.");
     } catch (error) {
         console.error("Firebase Anonymous Authentication failed:", error);
     }
@@ -98,15 +53,41 @@ async function initFirebase() {
             isAuthReady = true;
             console.log(`Auth Ready. User ID: ${userId} (Source: Anonymous Auth)`);
             
-            // NEW: Start listening for Pro status after user ID is available
-            watchProStatus(userId);
+            // Start the real-time Pro status listener
+            setupProStatusListener();
+
+            // Ensure the user document exists on first login
+            ensureUserDocumentExists(userId);
         } else {
             userId = null;
             isAuthReady = false;
             isPro = false; // Reset Pro status if user signs out
+            updateUIForProStatus(false);
             console.log("User is signed out.");
         }
     });
+}
+
+/**
+ * Ensures a placeholder document exists for the user in the production-ready path.
+ * This is crucial so the backend (Webhook) knows where to write the update.
+ */
+async function ensureUserDocumentExists(uid) {
+    if (!db || !uid) return;
+
+    // Production Path: users/{userId}/subscriptions/dataxlator
+    const statusDocRef = doc(db, `users/${uid}/subscriptions/dataxlator`);
+
+    try {
+        await setDoc(statusDocRef, { 
+            isPro: false,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp(),
+        }, { merge: true });
+        console.log("User document ensured at:", statusDocRef.path);
+    } catch (e) {
+        console.error("Failed to create user document:", e);
+    }
 }
 
 
@@ -145,16 +126,16 @@ function trackEvent(eventName, eventData = {}) {
     }
 }
 
-// --- 3. Pro Status Check (UPDATED) ---
+// --- 3. Pro Status Check ---
 function isProUser() {
-    // UPDATED: Now returns the secure, server-managed state
+    // Returns the global, secure, server-managed state
     return isPro; 
 }
 
 /**
  * Updates the UI elements (like the bulk button) based on the latest Pro status.
  */
-function updateUIForProStatus() {
+function updateBulkUI() {
     if (bulkConvertButton && bulkMessage) {
         if (isPro) {
             bulkConvertButton.disabled = false;
@@ -182,14 +163,10 @@ function csvToJSON(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length <= 1) return [];
 
-    // FIX START: Stricter check for CSV format by verifying the header row contains a comma.
     const headerLine = lines[0];
     if (!headerLine.includes(',')) {
-        // If the header row doesn't contain a comma, it's likely not CSV and we return an empty array 
-        // to trigger the parsing failure error message in translateData.
         return []; 
     }
-    // FIX END
 
     // Extract headers (first line) and sanitize them (trim, remove quotes)
     const headers = headerLine.split(',').map(h => h.trim().replace(/^['"]|['"]$/g, ''));
@@ -242,13 +219,12 @@ function jsonToSQL(records, tableName = 'dataxlator_records') {
             return 'NULL';
         }
         
-        // FIX START: Handle complex objects and arrays by serializing to JSON string
+        // Handle complex objects and arrays by serializing to JSON string
         if (typeof value === 'object') {
             const jsonString = JSON.stringify(value);
             // Escape single quotes within the JSON string and wrap the whole thing in SQL quotes
             return `'${jsonString.replace(/'/g, "''")}'`;
         }
-        // FIX END
         
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value);
@@ -338,7 +314,6 @@ function translateData() {
             return;
         }
     } else {
-        // FIX START: Prioritize user's explicit YAML selection
         if (inputFormatValue === 'yaml') {
             // User explicitly chose YAML. Try to parse as YAML.
             try {
@@ -368,10 +343,7 @@ function translateData() {
                 inputFormatValue = 'json';
                 parsedObject = jsonCandidate;
             } 
-            // If jsonCandidate is null and inputFormatValue was 'json', parsedObject remains null, 
-            // and the final failure check handles it.
         }
-        // FIX END
     }
     
     // 4. Handle Parsing Failure 
@@ -429,7 +401,7 @@ async function handleEarlyAccessSignup() {
     }
 
     if (!isAuthReady) {
-        statusMessageElement.textContent = "Database service not ready. Please check configuration.";
+        statusMessageElement.textContent = "Database service not ready. Please check console.";
         statusMessageElement.style.color = '#FFC107';
         console.warn("Attempted signup before auth was ready.");
         return;
@@ -457,7 +429,7 @@ async function handleEarlyAccessSignup() {
         await addDoc(emailCollectionRef, {
             email: email,
             timestamp: serverTimestamp(),
-            userId: userId, // The Anonymous UID
+            userId: userId, // The Authenticated UID
             signup_source: 'early_access_pro_tab'
         });
 
@@ -493,10 +465,9 @@ async function handleEarlyAccessSignup() {
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
-    // UPDATED: Now uses the server-verified isProUser() status
+    // Check global status (updated in real-time by setupProStatusListener)
     if (!isProUser()) {
-        // 1. Disable the button and update message via updateUIForProStatus()
-        updateUIForProStatus();
+        updateBulkUI(); // Ensures message is correct
         return; // Exit early if not Pro
     }
     
@@ -569,6 +540,143 @@ async function handleBulkConversion() {
     } 
 }
 
+// ----------------------------------------------------------------------
+// --- NEW PRO STATUS UI LOGIC (FIREBASE INTEGRATED) ---
+// ----------------------------------------------------------------------
+
+/**
+ * Shows a temporary, one-time notification for a newly authenticated Pro user.
+ */
+function showProWelcomeNotification() {
+    const hasSeenWelcome = localStorage.getItem('dataxlator_pro_welcome_seen');
+
+    if (!hasSeenWelcome) {
+        const toast = document.createElement('div');
+        toast.id = 'pro-welcome-toast';
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #FFD700; /* Gold */
+            color: #000;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            font-weight: bold;
+            font-family: 'Inter', sans-serif;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(-50px);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        `;
+        toast.textContent = '🎉 Congratulations! Pro Status Unlocked.';
+        document.body.appendChild(toast);
+
+        // Animate the toast in
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        }, 10);
+
+        // Animate the toast out and remove it after 5 seconds
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-50px)';
+        }, 5000);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 5500);
+
+        // Set flag so it only shows once per session to avoid annoying users
+        localStorage.setItem('dataxlator_pro_welcome_seen', 'true');
+    }
+}
+
+/**
+ * Updates the UI state based on the user's Pro status from Firestore.
+ * @param {boolean} newIsPro - True if the user has Pro access.
+ */
+function updateUIForProStatus(newIsPro) {
+    // 1. Update the global state
+    isPro = newIsPro;
+
+    const bulkConvertButton = document.getElementById('bulk-convert-button');
+    const inputFormatSelect = document.getElementById('input-format');
+    const outputFormatSelect = document.getElementById('output-format');
+
+    // 2. Locate and enable/disable Pro-only options (CSV Input, SQL Output)
+    const csvProOption = inputFormatSelect ? inputFormatSelect.querySelector('option[value="csv"]') : null;
+    const sqlProOption = outputFormatSelect ? outputFormatSelect.querySelector('option[value="sql"]') : null;
+
+    if (csvProOption) {
+        csvProOption.disabled = !isPro;
+        csvProOption.textContent = isPro ? 'CSV' : 'CSV (PRO)';
+    }
+
+    if (sqlProOption) {
+        sqlProOption.disabled = !isPro;
+        sqlProOption.textContent = isPro ? 'SQL INSERT' : 'SQL INSERT (PRO)';
+    }
+
+    // Safety: If a disabled option is currently selected, reset to JSON and re-run translate
+    if (!isPro && outputFormatSelect && outputFormatSelect.value === 'sql') {
+        outputFormatSelect.value = 'json';
+        translateData();
+    }
+    if (!isPro && inputFormatSelect && inputFormatSelect.value === 'csv') {
+        inputFormatSelect.value = 'json';
+        translateData();
+    }
+
+    // 3. Enable/Disable the Bulk Conversion Button and update its message
+    updateBulkUI();
+
+    // 4. Handle successful Pro Upgrade (instant feedback)
+    if (isPro) {
+        // A. Automatically switch to the "Pro Features" tab.
+        const currentTab = document.querySelector('.tab-button.active')?.dataset.tab;
+        if (typeof openTab === 'function' && currentTab !== 'pro') {
+            openTab('pro');
+        }
+
+        // B. Show the one-time welcome notification.
+        showProWelcomeNotification();
+    }
+}
+
+/**
+ * Sets up a real-time Firestore listener to monitor the user's Pro status.
+ */
+function setupProStatusListener() {
+    if (!db || !userId) {
+        console.error("Cannot set up Pro listener: DB or User ID is missing.");
+        return;
+    }
+    
+    // Production Path: users/{userId}/subscriptions/dataxlator
+    const statusDocRef = doc(db, `users/${userId}/subscriptions/dataxlator`);
+
+    // onSnapshot provides real-time updates for Pro status
+    onSnapshot(statusDocRef, (docSnap) => {
+        let newIsPro = false;
+        if (docSnap.exists()) {
+            const userData = docSnap.data();
+            newIsPro = userData.isPro === true;
+        }
+
+        // Only run the heavy UI update if the status actually changed
+        if (newIsPro !== isPro) {
+            console.log(`Real-time Pro Status Change Detected: ${newIsPro ? 'UPGRADED' : 'EXPIRED'}`);
+            updateUIForProStatus(newIsPro);
+        }
+
+    }, (error) => {
+        console.error("Error listening to Pro status:", error);
+        // Default to non-pro status on listener error
+        updateUIForProStatus(false);
+    });
+}
 
 // --- 6. Event Listeners ---
 
@@ -610,7 +718,7 @@ function initDOMAndListeners() {
     }
     
     // Initial UI update based on the default false 'isPro' status
-    updateUIForProStatus();
+    updateUIForProStatus(false);
 }
 
 document.addEventListener('DOMContentLoaded', initDOMAndListeners);

@@ -3,95 +3,139 @@ import json
 import zipfile
 import yaml
 import csv
-from collections import OrderedDict # New import for guaranteed key order
+import os
+import base64 # Required for decoding Base64 credentials
+from collections import OrderedDict
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS 
-from werkzeug.datastructures import FileStorage
+from flask_cors import CORS
+
+# --- FIREBASE FIRESTORE SETUP ---
+# Requires: pip install firebase-admin
+from firebase_admin import credentials, initialize_app, firestore
+
+db = None # Firestore client instance
+
+try:
+    # 1. Load Base64 encoded JSON string from environment variable
+    base64_json_string = os.environ.get('FIREBASE_ADMIN_CREDENTIALS')
+    
+    if base64_json_string:
+        # 2. Decode the Base64 string back into JSON bytes
+        service_account_json_bytes = base64.b64decode(base64_json_string)
+        
+        # 3. Load JSON content into a dict (in memory) and initialize the SDK
+        cred_dict = json.loads(service_account_json_bytes.decode('utf-8'))
+        cred = credentials.Certificate(cred_dict)
+        
+        initialize_app(cred)
+        db = firestore.client()
+        print("Firestore client initialized successfully.")
+    else:
+        print("WARNING: FIREBASE_ADMIN_CREDENTIALS environment variable not set. Database will not function.")
+        
+except Exception as e:
+    print(f"FATAL ERROR initializing Firebase Admin SDK: {e}.")
+
 
 app = Flask(__name__)
-
-# Enable CORS explicitly for production deployment
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
-# --- Configuration ---
-# Set the maximum content length for uploads (e.g., 16 MB limit for the zip file)
+# --- CONFIGURATION & SECRETS ---
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
-# --- Custom Dumper for YAML (Fixes Sorting) ---
-# NOTE: The explicit use of OrderedDict below makes this custom dumper largely redundant, 
-# but we keep the structure clean for compatibility. We still need to register it.
+# Load the webhook secret securely from environment variables
+WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'NO_SECRET_SET')
+print(f"Webhook Secret Status: {'Set' if WEBHOOK_SECRET != 'NO_SECRET_SET' else 'MISSING'}")
+
+
+# --- FIRESTORE HELPER FUNCTIONS ---
+
+def get_pro_status_ref(user_id):
+    """
+    Helper to get the correct Firestore document reference for the user's Pro status.
+    This path MUST match the listener path in the frontend app.js: 
+    users/{userId}/subscriptions/dataxlator
+    """
+    if db is None:
+        return None
+        
+    return db.collection('users').document(user_id).collection('subscriptions').document('dataxlator')
+
+def get_user_status_db(user_id):
+    """Fetches user status from Firestore. Returns (data, error)."""
+    
+    user_ref = get_pro_status_ref(user_id)
+    if user_ref is None:
+        return None, "Database not initialized."
+    
+    try:
+        doc = user_ref.get()
+        if doc.exists:
+            # Returns user data if found
+            return doc.to_dict(), None
+        # Returns empty dict if not found (defaults to non-Pro)
+        return {}, None 
+    except Exception as e:
+        return None, f"Firestore read failed: {e}"
+
+def update_user_pro_status(user_id, is_pro_status):
+    """Updates user's isPro status in Firestore. Returns (success, error)."""
+    
+    user_ref = get_pro_status_ref(user_id)
+    if user_ref is None:
+        return False, "Database not initialized."
+
+    try:
+        # CRITICAL FIX: The update now targets the /subscriptions/dataxlator document.
+        # This document needs to be created first (handled by app.js ensureUserDocumentExists)
+        # but merge=True ensures it updates or creates the document safely.
+        user_ref.set({'isPro': is_pro_status, 'updatedAt': firestore.SERVER_TIMESTAMP}, merge=True)
+        return True, None
+    except Exception as e:
+        return False, f"Firestore update failed: {e}"
+
+
+# --- Conversion Helper Functions (Kept from original) ---
+
 class NoAliasSafeDumper(yaml.SafeDumper):
     """Custom YAML Dumper to prevent aliases and preserve dictionary key order."""
     pass
 
-# FIX 1: Register a function to represent standard Python dicts AND OrderedDict.
 def dict_representer(dumper, data):
-    # This represents the dictionary keys in the order they are iterated (insertion order for OrderedDict/modern dict)
     return dumper.represent_mapping('tag:yaml.org,2002:map', data.items())
 
 NoAliasSafeDumper.add_representer(dict, dict_representer)
 NoAliasSafeDumper.add_representer(OrderedDict, dict_representer)
 
-
-# --- Helper Functions for Conversion ---
-
 def json_to_yaml(data_str):
-    """Converts a JSON string to a YAML string, preserving key order."""
-    # FIX 1: Use object_pairs_hook=OrderedDict to load JSON with guaranteed order
     data = json.loads(data_str, object_pairs_hook=OrderedDict)
-    # Use the custom Dumper class. The OrderedDict and the custom Dumper registration 
-    # handle order preservation, so we remove the potentially conflicting sort_keys=False argument.
     return yaml.dump(data, Dumper=NoAliasSafeDumper, default_flow_style=False)
 
 def yaml_to_json(data_str):
-    """Converts a YAML string to a JSON string (formatted with 2 spaces)."""
     data = yaml.safe_load(data_str)
     return json.dumps(data, indent=2)
 
 def json_to_sql_insert(json_data_str, table_name="your_table"):
-    """
-    Converts a JSON string (can be a single object or an array of objects) 
-    to SQL INSERT statements. Handles nested objects/arrays and single records.
-    """
-    # FIX 2: Use OrderedDict for robust parsing of single records
     data = json.loads(json_data_str, object_pairs_hook=OrderedDict)
-    
-    # FIX 2: If data is a dictionary (single record), wrap it in a list.
-    # This handles both standard dicts and OrderedDicts used during parsing.
-    if isinstance(data, dict):
-        data = [data]
-    
-    # Check if we have a non-empty list of records
-    if not isinstance(data, list) or not data:
+    if isinstance(data, dict): data = [data]
+    if not isinstance(data, list) or not data or not data[0].keys():
         raise ValueError("JSON data must be a non-empty object or array of objects.")
-    
-    # Check for empty record (e.g., if input was [{}])
-    if not data[0].keys():
-         raise ValueError("JSON record is empty and cannot be converted to SQL columns.")
         
     columns = data[0].keys()
-    # The columns are now guaranteed to be in the original insertion order
     columns_str = ", ".join([f"`{c}`" for c in columns])
-    
     sql_statements = []
     
     for row in data:
         values = []
-        # row is now an OrderedDict, so iteration order is correct
         for col in columns:
             value = row.get(col)
-            if isinstance(value, str):
-                # Handle simple strings: escape single quotes and wrap in SQL quotes
-                values.append(f"'{value.replace('\'', '\'\'')}'") 
+            if isinstance(value, str): values.append(f"'{value.replace('\'', '\'\'')}'") 
             elif isinstance(value, (dict, list)):
-                # Handle nested objects/arrays by stringifying them into JSON before SQL
                 json_value = json.dumps(value)
                 values.append(f"'{json_value.replace('\'', '\'\'')}'")
-            elif value is None:
-                values.append('NULL')
-            else:
-                values.append(str(value))
-        
+            elif value is None: values.append('NULL')
+            else: values.append(str(value))
+            
         values_str = ", ".join(values)
         sql = f"INSERT INTO `{table_name}` ({columns_str}) VALUES ({values_str});"
         sql_statements.append(sql)
@@ -99,19 +143,70 @@ def json_to_sql_insert(json_data_str, table_name="your_table"):
     return "\n".join(sql_statements)
 
 def csv_to_json(data_str):
-    """Converts CSV string to a JSON array of objects."""
     f = io.StringIO(data_str)
     reader = csv.DictReader(f)
     json_data = list(reader)
     return json.dumps(json_data, indent=2)
 
-# --- Main API Route for Bulk Conversion (The Monetized Feature) ---
+# --- API ENDPOINTS ---
+
+@app.route('/user/<user_id>', methods=['GET'])
+def get_user_status(user_id):
+    """Endpoint for clients to check a user's Pro status."""
+    user_data, error = get_user_status_db(user_id)
+    
+    if user_data is not None and error is None:
+        is_pro = user_data.get("isPro", False) # Default to False if field is missing
+        return jsonify({"user_id": user_id, "isPro": is_pro}), 200
+    
+    # Handle DB init error or read failure
+    status_code = 500 if "Database not initialized" in (error or "") else 404
+    return jsonify({"user_id": user_id, "isPro": False, "error": error or "User not found"}), status_code
+
+@app.route('/webhook/payment-success', methods=['POST'])
+def handle_payment_success():
+    """Secure endpoint for the payment processor to upgrade a user to Pro."""
+    # SECURITY: Verify the webhook secret provided in the request header
+    if request.headers.get('X-Webhook-Secret') != WEBHOOK_SECRET:
+        return jsonify({"error": "Unauthorized: Invalid webhook secret"}), 403
+
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id') 
+
+        if not user_id:
+            return jsonify({"error": "Missing user_id in payload"}), 400
+
+        # Update the user's status in Firestore
+        success, db_error = update_user_pro_status(user_id, True)
+
+        if success:
+            return jsonify({"status": "acknowledged", "user_id": user_id, "isPro": True}), 200
+        else:
+            return jsonify({"error": f"Failed to update user status in DB: {db_error}"}), 500
+
+    except Exception as e:
+        print(f"Error processing webhook: {e}")
+        return jsonify({"error": "Internal server error during webhook processing"}), 500
+
 
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
-    """
-    Handles bulk conversion of files contained within an uploaded ZIP file.
-    """
+    """The main monetized feature: handles bulk conversion after a Pro status check."""
+    user_id = request.args.get('user_id') 
+    
+    # 1. CHECK PRO STATUS
+    # The DB check now automatically uses the correct path: users/{userId}/subscriptions/dataxlator
+    user_data, error = get_user_status_db(user_id)
+    is_pro = user_data.get('isPro', False) if user_data else False
+
+    # Monetization Gate: Block if user is not verified or not Pro
+    if not user_id or not is_pro:
+        if error and "Database" in error:
+             return jsonify({"error": "Internal Database error. Try again later."}), 500
+        return jsonify({"error": "Access Denied. This bulk conversion feature is reserved for Pro users."}), 403
+
+    # 2. FILE VALIDATION (Original logic)
     if 'zip_file' not in request.files:
         return jsonify({"error": "No ZIP file part in the request."}), 400
 
@@ -120,19 +215,17 @@ def bulk_convert():
     if not uploaded_file.filename.lower().endswith('.zip'):
         return jsonify({"error": "File must be a ZIP archive."}), 400
 
+    # 3. PROCESSING LOGIC (Original logic)
     try:
         input_zip_buffer = io.BytesIO(uploaded_file.read())
         output_zip_buffer = io.BytesIO()
-        
         file_count = 0
         
         with zipfile.ZipFile(input_zip_buffer, 'r') as input_zip:
             with zipfile.ZipFile(output_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as output_zip:
                 
                 for filename in input_zip.namelist():
-                    if filename.endswith('/'):
-                        continue
-                    
+                    if filename.endswith('/'): continue
                     converted_content = None
                     converted_content_sql = None
                     new_filename = None
@@ -142,72 +235,58 @@ def bulk_convert():
                     try:
                         with input_zip.open(filename) as file:
                             content = file.read().decode('utf-8')
-                            
                             file_count += 1
-                            
                             lower_filename = filename.lower()
                             
-                            # --- Conversion Logic ---
+                            # JSON Processing
                             if lower_filename.endswith(('.json')):
-                                # JSON -> YAML conversion (Primary conversion)
                                 converted_content = json_to_yaml(content)
                                 new_filename = filename.replace('.json', '.yaml')
                                 convert_type = 'JSON_TO_YAML'
-                                
-                                # JSON -> SQL conversion (Secondary conversion)
                                 try:
                                     converted_content_sql = json_to_sql_insert(content)
                                     new_filename_sql = filename.replace('.json', '.sql')
                                 except Exception as sql_e:
-                                    # This should only skip if the JSON is a primitive (not object/array)
                                     print(f"Skipped JSON to SQL conversion for {filename}: {str(sql_e)}")
                                     pass
 
+                            # YAML Processing
                             elif lower_filename.endswith(('.yaml', '.yml')):
-                                # YAML to JSON conversion
                                 converted_content = yaml_to_json(content)
                                 new_filename = filename.replace('.yaml', '.json').replace('.yml', '.json')
                                 convert_type = 'YAML_TO_JSON'
 
+                            # CSV Processing
                             elif lower_filename.endswith(('.csv')):
-                                # CSV to JSON conversion (Primary conversion)
                                 json_content = csv_to_json(content)
                                 converted_content = json_content
                                 new_filename = filename.replace('.csv', '.json')
                                 convert_type = 'CSV_TO_JSON'
-                                
-                                # CSV to SQL conversion (Secondary conversion)
                                 try:
                                     converted_content_sql = json_to_sql_insert(json_content)
                                     new_filename_sql = filename.replace('.csv', '.sql')
                                 except Exception as sql_e:
-                                     print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
-                                     pass
-                            # --- End Conversion Logic ---
+                                    print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
+                                    pass
                             
                     except Exception as e:
-                        # Write an error file instead of crashing the batch
                         error_message = f"ERROR converting {filename} (Type: {convert_type or 'Unknown'}): {str(e)}"
                         print(error_message)
                         new_filename = f"{filename}_ERROR.txt"
                         converted_content = error_message
                         
-                    # Write the primary converted or error content to the output ZIP
                     if converted_content and new_filename:
                         output_zip.writestr(new_filename, converted_content.encode('utf-8'))
-
-                    # Write the secondary SQL content to the output ZIP, if generated
                     if converted_content_sql and new_filename_sql:
-                         output_zip.writestr(new_filename_sql, converted_content_sql.encode('utf-8'))
+                            output_zip.writestr(new_filename_sql, converted_content_sql.encode('utf-8'))
 
 
                 if file_count == 0:
                     return jsonify({"error": "ZIP file contained no recognizable files (.json, .yaml, .yml, .csv)"}), 400
 
-            # Prepare buffer for response
             output_zip_buffer.seek(0)
             
-            # Send the new ZIP file back to the client
+            # 4. SEND RESPONSE
             return send_file(
                 output_zip_buffer,
                 mimetype='application/zip',
@@ -222,5 +301,4 @@ def bulk_convert():
         return jsonify({"error": "An internal server error occurred during processing."}), 500
 
 if __name__ == '__main__':
-    # Use for local testing only
     app.run(debug=True, port=5000)
