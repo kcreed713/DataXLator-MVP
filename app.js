@@ -494,8 +494,22 @@ async function handleBulkConversion() {
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
     bulkMessage.style.color = '#FFD700'; // Yellow/Processing color
     
+    // --- CRITICAL FIX START ---
+    // 1. Check if the user ID is available
+    if (!userId) {
+        bulkMessage.textContent = '❌ Authentication Error: User ID is missing.';
+        bulkMessage.style.color = '#D32F2F';
+        bulkConvertButton.disabled = false;
+        return;
+    }
+
+    // 2. Construct the dynamic API URL with the userId query parameter
+    const dynamicApiUrl = `${BULK_API_URL}?user_id=${userId}`; 
+    // --- CRITICAL FIX END ---
+
     try {
-        const response = await fetch(BULK_API_URL, {
+        // Use the new dynamic URL in the fetch request
+        const response = await fetch(dynamicApiUrl, {
             method: 'POST',
             body: formData,
         });
@@ -522,9 +536,10 @@ async function handleBulkConversion() {
             
             try {
                 const errorJson = JSON.parse(errorText);
+                // The server sends back {"error": "Access Denied..."}
                 errorMessage = `API Error: ${errorJson.error || 'Unknown Server Error'}`;
             } catch (e) {
-                // keep raw text
+                // keep raw text if not JSON
             }
 
             bulkMessage.textContent = `❌ ${errorMessage}`;
