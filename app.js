@@ -1,11 +1,16 @@
 // --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// CRITICAL FIX: Added Timestamp to imports for trial logic
+import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, onSnapshot, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- Configuration ---
 // IMPORTANT: This URL is the Render deployment.
 const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+
+// --- TRIAL DURATION ---
+const TRIAL_DURATION_DAYS = 7; 
+// ------------------------------------
 
 // --- GLOBAL FIREBASE INSTANCES & STATE ---
 let db = null;
@@ -13,6 +18,7 @@ let auth = null;
 let userId = null;
 let isAuthReady = false;
 let isPro = false; // Secure, server-managed Pro status
+let trialExpiresAt = null; // To track trial expiry timestamp (in milliseconds)
 
 // Set Firestore log level to Debug for visibility in the console
 setLogLevel('debug');
@@ -24,7 +30,7 @@ setLogLevel('debug');
 async function initFirebase() {
     console.log("Initializing Firebase for Production...");
 
-    // IMPORTANT: REPLACE THESE PLACEHOLDERS WITH YOUR PRODUCTION FIREBASE CONFIG
+    // IMPORTANT: PRODUCTION FIREBASE CONFIG
     const firebaseConfig = {
         apiKey: "AIzaSyBdIrcFJGnsPh04bHcLJ6ef1pUDWR3ZXXw",
         authDomain: "dataxlator.firebaseapp.com",
@@ -62,6 +68,7 @@ async function initFirebase() {
             userId = null;
             isAuthReady = false;
             isPro = false; // Reset Pro status if user signs out
+            trialExpiresAt = null;
             updateUIForProStatus(false);
             console.log("User is signed out.");
         }
@@ -126,24 +133,168 @@ function trackEvent(eventName, eventData = {}) {
     }
 }
 
-// --- 3. Pro Status Check ---
+// --- 3. Pro Status Check (UPDATED) ---
+
+/**
+ * Checks if the current user has an active Pro subscription OR a non-expired trial.
+ * @returns {boolean} True if the user is currently Pro or on an active trial.
+ */
 function isProUser() {
-    // Returns the global, secure, server-managed state
-    return isPro; 
+    // If the flag is set (permanent Pro or trial active)
+    if (isPro) {
+        // If there's an expiry time, check if it's in the future
+        if (trialExpiresAt) {
+            return Date.now() < trialExpiresAt;
+        }
+        // If isPro is true but trialExpiresAt is null, it's a permanent purchase, return true.
+        return true;
+    }
+    return false;
 }
+
+/**
+ * Checks if a trial is active but about to expire soon. Used for UI warnings.
+ * @returns {boolean} True if trial is active and expiring within 2 days.
+ */
+function isTrialExpiringSoon() {
+    if (trialExpiresAt && isProUser()) {
+        const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+        return trialExpiresAt - Date.now() < twoDaysMs;
+    }
+    return false;
+}
+
+// --- Email/Trial Activation Logic (NEW/UPDATED) ---
+
+/**
+ * Activates a 7-day trial by setting the expiration timestamp in Firestore.
+ * This is called when a user submits their email through the trial prompt.
+ * @param {string} email - The user's email address.
+ */
+async function activateTrial(email) {
+    if (!userId || !db) {
+        showToast('Error: App not initialized. Please refresh.', 'error');
+        return;
+    }
+
+    try {
+        const subscriptionRef = doc(db, `users/${userId}/subscriptions/dataxlator`);
+        const emailSignupRef = collection(db, 'email_signups');
+
+        const now = Date.now();
+        // Calculate expiry timestamp
+        const expiresMs = now + (TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+        const expiresTimestamp = Timestamp.fromMillis(expiresMs);
+        
+        // 1. Set the trial status in the user's subscription document
+        await setDoc(subscriptionRef, {
+            isPro: true,
+            updatedAt: serverTimestamp(),
+            // CRITICAL: Set the expiration time in Firestore
+            expiresAt: expiresTimestamp, 
+            status: 'trial_active',
+            trialStart: serverTimestamp(),
+        }, { merge: true });
+
+        // 2. Save the user's email for marketing/follow-up
+        await addDoc(emailSignupRef, {
+            email: email,
+            userId: userId,
+            signupDate: serverTimestamp(),
+            source: 'trial_activation',
+        });
+
+        // The listener will pick up the change and update the UI immediately
+        trackEvent('Trial_Activation_Success');
+        
+    } catch (error) {
+        console.error("Error saving email or activating trial:", error);
+        throw new Error("Could not activate trial. Check console for details.");
+    }
+}
+
+
+/**
+ * Handles the click event for the 'Start Trial' button and saves the email to Firestore.
+ * (Original handleEarlyAccessSignup function, now adapted for trial activation)
+ */
+async function handleEarlyAccessSignup() {
+    // We access the email input and button from the global DOM selection section (1)
+    const email = emailInput ? emailInput.value.trim() : '';
+    // Use the status message div in the Pro tab
+    const statusMessageElement = document.getElementById('pro-status-message'); 
+
+    if (!statusMessageElement) {
+        console.error("Status message element not found.");
+        return;
+    }
+
+    if (!isAuthReady) {
+        statusMessageElement.textContent = "Database service not ready. Please check console.";
+        statusMessageElement.style.color = '#FFC107';
+        return;
+    }
+
+    if (!email || !email.includes('@')) {
+        statusMessageElement.textContent = "Please enter a valid email address.";
+        statusMessageElement.style.color = '#D32F2F'; // Red for error
+        return;
+    }
+
+    // Disable button to prevent double submission
+    if (earlyAccessButton) {
+        earlyAccessButton.disabled = true;
+        earlyAccessButton.textContent = 'Activating Trial...';
+    }
+    
+    statusMessageElement.textContent = "Processing...";
+    statusMessageElement.style.color = '#FFD700'; // Processing color
+
+    try {
+        // --- CRITICAL CHANGE: Activate the 7-day trial ---
+        await activateTrial(email);
+        
+        statusMessageElement.textContent = "Success! Free 7-Day Pro Trial Activated!";
+        statusMessageElement.style.color = '#4CAF50'; // Green for success
+        if (emailInput) emailInput.value = ''; // Clear the input
+        
+        // Hide the form on success
+        if (emailCaptureForm) {
+            emailCaptureForm.style.display = 'none'; 
+        }
+
+    } catch (error) {
+        // Error from activateTrial is caught here
+        console.error("Error activating trial:", error);
+        statusMessageElement.textContent = `Error: ${error.message}`;
+        statusMessageElement.style.color = '#D32F2F'; // Red for error
+        
+        // Re-enable button on failure
+        if (earlyAccessButton) {
+            earlyAccessButton.disabled = false; 
+            earlyAccessButton.textContent = 'Start Free Trial'; 
+        }
+    } finally {
+        if (earlyAccessButton && statusMessageElement.style.color === '#4CAF50') {
+             // Keep the button disabled and updated for a successful, one-time submission
+             earlyAccessButton.textContent = 'Trial Active!';
+        }
+    }
+}
+
 
 /**
  * Updates the UI elements (like the bulk button) based on the latest Pro status.
  */
 function updateBulkUI() {
     if (bulkConvertButton && bulkMessage) {
-        if (isPro) {
+        if (isProUser()) {
             bulkConvertButton.disabled = false;
             bulkMessage.textContent = 'Pro features are unlocked. Upload your ZIP file for bulk conversion.';
             bulkMessage.style.color = '#4CAF50';
         } else {
-            bulkConvertButton.disabled = true;
-            bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Upgrade to unlock.';
+            bulkConvertButton.disabled = false; // Soft Gate: allow click to prompt for trial
+            bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Click "Bulk Convert" to start your free trial.';
             bulkMessage.style.color = '#999'; 
         }
     }
@@ -293,7 +444,7 @@ function translateData() {
 
     // 3. Pro Feature Monetization Check (CSV/SQL)
     if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
-        outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab.';
+        outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab to start your 7-day free trial.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
         if (typeof openTab === 'function') openTab('pro');
@@ -387,88 +538,18 @@ function translateData() {
 }
 
 
-/**
- * Handles the click event for the 'Get Early Access' button and saves the email to Firestore.
- */
-async function handleEarlyAccessSignup() {
-    // We access the email input and button from the global DOM selection section (1)
-    const email = emailInput ? emailInput.value.trim() : '';
-    let statusMessageElement = document.getElementById('pro-status-message'); // Dynamic element lookup
-
-    if (!statusMessageElement) {
-        console.error("Status message element not found.");
-        return;
-    }
-
-    if (!isAuthReady) {
-        statusMessageElement.textContent = "Database service not ready. Please check console.";
-        statusMessageElement.style.color = '#FFC107';
-        console.warn("Attempted signup before auth was ready.");
-        return;
-    }
-
-    if (!email || !email.includes('@')) {
-        statusMessageElement.textContent = "Please enter a valid email address.";
-        statusMessageElement.style.color = '#D32F2F'; // Red for error
-        return;
-    }
-
-    // Disable button to prevent double submission
-    if (earlyAccessButton) {
-        earlyAccessButton.disabled = true;
-        earlyAccessButton.textContent = 'Subscribing...';
-    }
-    
-    statusMessageElement.textContent = "Processing...";
-    statusMessageElement.style.color = '#999';
-
-    try {
-        // Production collection path: 'email_signups'
-        const emailCollectionRef = collection(db, 'email_signups');
-
-        await addDoc(emailCollectionRef, {
-            email: email,
-            timestamp: serverTimestamp(),
-            userId: userId, // The Authenticated UID
-            signup_source: 'early_access_pro_tab'
-        });
-
-        statusMessageElement.textContent = "Success! You are on the Early Access list!";
-        statusMessageElement.style.color = '#4CAF50'; // Green for success
-        if (emailInput) emailInput.value = ''; // Clear the input
-        console.log(`Email successfully captured for user ${userId}.`);
-
-    } catch (error) {
-        console.error("Error saving email to Firestore:", error);
-        statusMessageElement.textContent = "Error: Could not save your email. Check console for details.";
-        statusMessageElement.style.color = '#D32F2F'; // Red for error
-        if (earlyAccessButton) {
-            earlyAccessButton.disabled = false; // Re-enable on failure
-        }
-    } finally {
-        if (earlyAccessButton) {
-            // Only re-enable the button if signup was unsuccessful
-            if (statusMessageElement.style.color === '#D32F2F') {
-                earlyAccessButton.textContent = 'Get Early Access';
-            } else {
-                // Keep the button disabled and updated for a successful, one-time submission
-                earlyAccessButton.textContent = 'Subscribed!';
-            }
-        }
-    }
-}
-
-
-// --- 5. Bulk Conversion Logic (Pro Tier) ---
+// --- 5. Bulk Conversion Logic (Pro Tier) (UPDATED SOFT GATE) ---
 
 /**
  * Handles the upload of a ZIP file for bulk conversion via the backend API.
  */
 async function handleBulkConversion() {
-    // Check global status (updated in real-time by setupProStatusListener)
+    // --- Soft Trial Gate Check ---
     if (!isProUser()) {
-        updateBulkUI(); // Ensures message is correct
-        return; // Exit early if not Pro
+        bulkMessage.textContent = '🔒 Start your 7-day free trial to unlock bulk conversion!';
+        bulkMessage.style.color = '#FFC107'; 
+        if (typeof openTab === 'function') openTab('pro');
+        return; 
     }
     
     bulkMessage.textContent = ''; 
@@ -494,7 +575,6 @@ async function handleBulkConversion() {
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
     bulkMessage.style.color = '#FFD700'; // Yellow/Processing color
     
-    // --- CRITICAL FIX START ---
     // 1. Check if the user ID is available
     if (!userId) {
         bulkMessage.textContent = '❌ Authentication Error: User ID is missing.';
@@ -505,7 +585,6 @@ async function handleBulkConversion() {
 
     // 2. Construct the dynamic API URL with the userId query parameter
     const dynamicApiUrl = `${BULK_API_URL}?user_id=${userId}`; 
-    // --- CRITICAL FIX END ---
 
     try {
         // Use the new dynamic URL in the fetch request
@@ -563,7 +642,8 @@ async function handleBulkConversion() {
  * Shows a temporary, one-time notification for a newly authenticated Pro user.
  */
 function showProWelcomeNotification() {
-    const hasSeenWelcome = localStorage.getItem('dataxlator_pro_welcome_seen');
+    // IMPORTANT: Changed storage mechanism to be less permanent, but still session-based for UX
+    const hasSeenWelcome = sessionStorage.getItem('dataxlator_pro_welcome_seen');
 
     if (!hasSeenWelcome) {
         const toast = document.createElement('div');
@@ -604,7 +684,7 @@ function showProWelcomeNotification() {
         }, 5500);
 
         // Set flag so it only shows once per session to avoid annoying users
-        localStorage.setItem('dataxlator_pro_welcome_seen', 'true');
+        sessionStorage.setItem('dataxlator_pro_welcome_seen', 'true');
     }
 }
 
@@ -625,22 +705,26 @@ function updateUIForProStatus(newIsPro) {
     const sqlProOption = outputFormatSelect ? outputFormatSelect.querySelector('option[value="sql"]') : null;
 
     if (csvProOption) {
-        csvProOption.disabled = !isPro;
+        // Hard-gate disabled. We rely on the check inside translateData to gate.
+        csvProOption.disabled = false; 
         csvProOption.textContent = isPro ? 'CSV' : 'CSV (PRO)';
     }
 
     if (sqlProOption) {
-        sqlProOption.disabled = !isPro;
+         // Hard-gate disabled. We rely on the check inside translateData to gate.
+        sqlProOption.disabled = false;
         sqlProOption.textContent = isPro ? 'SQL INSERT' : 'SQL INSERT (PRO)';
     }
 
     // Safety: If a disabled option is currently selected, reset to JSON and re-run translate
     if (!isPro && outputFormatSelect && outputFormatSelect.value === 'sql') {
-        outputFormatSelect.value = 'json';
+        // Don't auto-reset selection, allow them to choose it, but the conversion will be blocked.
+        // outputFormatSelect.value = 'json';
         translateData();
     }
     if (!isPro && inputFormatSelect && inputFormatSelect.value === 'csv') {
-        inputFormatSelect.value = 'json';
+        // Don't auto-reset selection, allow them to choose it, but the conversion will be blocked.
+        // inputFormatSelect.value = 'json';
         translateData();
     }
 
@@ -657,11 +741,27 @@ function updateUIForProStatus(newIsPro) {
 
         // B. Show the one-time welcome notification.
         showProWelcomeNotification();
+        
+        // C. If the form is visible (i.e., they just activated a trial), hide it
+        if (emailCaptureForm) {
+            emailCaptureForm.style.display = 'none'; 
+            const statusMessageElement = document.getElementById('pro-status-message');
+            if(statusMessageElement) {
+                statusMessageElement.textContent = "Your 7-day free trial is active!";
+                statusMessageElement.style.color = '#4CAF50';
+            }
+        }
+    } else {
+        // If status reverts to false (e.g., trial expired)
+         if (emailCaptureForm) {
+            emailCaptureForm.style.display = 'block'; 
+        }
     }
 }
 
 /**
  * Sets up a real-time Firestore listener to monitor the user's Pro status.
+ * (UPDATED to include trial expiration logic)
  */
 function setupProStatusListener() {
     if (!db || !userId) {
@@ -675,13 +775,29 @@ function setupProStatusListener() {
     // onSnapshot provides real-time updates for Pro status
     onSnapshot(statusDocRef, (docSnap) => {
         let newIsPro = false;
+        let prevIsPro = isPro; // Capture previous state
+
         if (docSnap.exists()) {
             const userData = docSnap.data();
             newIsPro = userData.isPro === true;
+            
+            // CRITICAL: Check and set the trial expiration time
+            if (userData.expiresAt && userData.expiresAt.toMillis) {
+                trialExpiresAt = userData.expiresAt.toMillis();
+            } else {
+                trialExpiresAt = null; // Permanent Pro user (or no trial)
+            }
+            
+            // If the Pro flag is set (newIsPro is true) but the trial time is in the past, reset newIsPro.
+            // This is the core trial expiry check.
+            if (newIsPro && trialExpiresAt && Date.now() > trialExpiresAt) {
+                 console.log("Trial expired, reverting status.");
+                 newIsPro = false;
+            }
         }
 
-        // Only run the heavy UI update if the status actually changed
-        if (newIsPro !== isPro) {
+        // Only run the heavy UI update if the final status actually changed
+        if (newIsPro !== prevIsPro) {
             console.log(`Real-time Pro Status Change Detected: ${newIsPro ? 'UPGRADED' : 'EXPIRED'}`);
             updateUIForProStatus(newIsPro);
         }
@@ -713,12 +829,14 @@ function initDOMAndListeners() {
         outputFormat.addEventListener('change', translateData);
     }
     
-    // 3. Set up event listener for the PRO Early Access signup
+    // 3. Set up event listener for the PRO Early Access signup (Now Trial Activation)
     if (earlyAccessButton) {
         earlyAccessButton.addEventListener('click', handleEarlyAccessSignup);
+        // Update button text to reflect the new trial gate goal
+        earlyAccessButton.textContent = 'Start 7-Day Free Trial'; 
     }
 
-    // 4. Set up event listener for Bulk Conversion (Pro Feature)
+    // 4. Set up event listener for Bulk Conversion (Pro Feature Soft Gate)
     if (bulkConvertButton) {
         bulkConvertButton.addEventListener('click', handleBulkConversion);
     }
@@ -729,7 +847,10 @@ function initDOMAndListeners() {
         statusDiv.id = 'pro-status-message';
         statusDiv.style.marginTop = '10px';
         statusDiv.style.minHeight = '20px'; // Reserve space
-        emailCaptureForm.parentNode.insertBefore(statusDiv, emailCaptureForm.nextSibling);
+        // Set initial prompt text
+        statusDiv.textContent = 'Enter your email to activate a 7-day free trial and unlock all Pro features.';
+        statusDiv.style.color = '#5a67d8'; // Blue color for a call to action
+        emailCaptureForm.parentNode.insertBefore(statusDiv, emailCaptureForm);
     }
     
     // Initial UI update based on the default false 'isPro' status
