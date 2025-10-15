@@ -2,7 +2,6 @@
 <html lang="en">
 
 <head>
-    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SH37JYM6HP"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -27,22 +26,21 @@
         <meta property="og:url" content="https://kcreed713.github.io/DataXLator-MVP/index.html">
         <meta property="og:type" content="website">
 
-        <!--Schema Markup for Search Engine Optimization (SEO)-->
         <script type="application/ld+json">
-            {
-                "@context": "https://schema.org",
-                "@type": "SoftwareApplication",
-                "name": "DataXLator",
-                "applicationCategory": "DeveloperTool",
-                "offers": {
-                    "@type": "Offer",
-                    "price": "0",
-                    "priceCurrency": "USD"
-                },
-                "url": "https://kcreed713.github.io/DataXLator-MVP/index.html",
-                "description": "Universal data conversion tool for JSON, YAML, CSV, and SQL. Features free single-file conversion and Pro bulk processing."
-            }
-        </script>
+			{
+				"@context": "https://schema.org",
+				"@type": "SoftwareApplication",
+				"name": "DataXLator",
+				"applicationCategory": "DeveloperTool",
+				"offers": {
+					"@type": "Offer",
+					"price": "0",
+					"priceCurrency": "USD"
+				},
+				"url": "https://kcreed713.github.io/DataXLator-MVP/index.html",
+				"description": "Universal data conversion tool for JSON, YAML, CSV, and SQL. Features free single-file conversion and Pro bulk processing."
+			}
+		</script>
 
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:site" content="@kcreed713">
@@ -254,6 +252,7 @@
 
             /* Pricing/Pro Features Layout (Inside Tab) */
             .pricing-section-pro {
+                /* Keeping this section centered and moderate width */
                 width: 50%;
                 margin: 0 auto;
                 text-align: center;
@@ -286,7 +285,8 @@
                 width: 200px;
                 flex-shrink: 0;
                 border-radius: 6px;
-                text-decoration: none; /* Crucial for links */
+                text-decoration: none;
+                /* Crucial for links */
                 font-weight: bold;
                 cursor: pointer;
                 transition: background-color 0.2s, transform 0.1s;
@@ -312,23 +312,46 @@
                 margin-bottom: 20px;
             }
 
-            /* Bulk Converter Section (Inside Tab) */
+            /* Bulk Converter Section (Inside Bulk Tab) - WIDENED */
             .bulk-converter-pro {
-                width: 50%;
+                /* Widened to 90% */
+                width: 90%;
+                max-width: 1000px; /* Optional cap for very wide screens */
                 margin: 40px auto 0 auto;
                 text-align: center;
-                border: 1px dashed #3C3C3C;
-                padding: 20px;
+                border: 3px solid #FFD700;
+                background-color: #333;
+                padding: 25px;
                 border-radius: 8px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
             }
 
-            .bulk-converter-pro p {
-                font-weight: bold;
-                color: #4CAF50;
+            /* Ensure input/button inside are still centered */
+            .bulk-converter-pro input[type="file"] {
+                width: 80%;
+                max-width: 350px;
+                margin-bottom: 10px;
+                padding: 10px;
+                background-color: #2D2D2D;
+                color: #D4D4D4;
+                border: 1px solid #3C3C3C;
+                border-radius: 6px;
             }
 
+            /* Standard button style for bulk-convert-button */
             #bulk-convert-button {
-                margin-top: 15px;
+                margin-top: 5px;
+                background-color: #007ACC;
+                color: white;
+                padding: 12px 30px;
+                font-weight: bold;
+                font-size: 1.1em;
+                width: 80%;
+                max-width: 350px;
+            }
+
+            #bulk-convert-button:hover {
+                background-color: #005A9C;
             }
 
             /* Footer */
@@ -344,49 +367,17 @@
                 text-decoration: none;
             }
 
-            /* --- Pro Feature Card Styling --- */
-
-            .pro-feature-card {
-                /* Styles the container to stand out */
-                border: 3px solid #FFD700;
-                /* Gold border */
-                background-color: #333;
-                padding: 25px;
-                margin: 30px 0;
-                border-radius: 8px;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-            }
+            /* --- Pro Feature Card Styling (REMOVED as a separate block, keeping only the gold button style) --- */
 
             .pro-content-center {
-                /* Centers the text content inside the card */
+                /* Used for centering the content that was moved */
                 text-align: center;
+                margin-top: 25px; /* Added spacing after file upload section */
+                padding-top: 20px;
+                border-top: 1px solid #555; /* Separator line */
             }
 
-            .email-capture-form {
-                /* Makes the form input and button appear in a block */
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                /* Centers items horizontally */
-                margin-top: 15px;
-            }
-
-            #pro-email-input {
-                /* Styles the email input box */
-                padding: 12px;
-                margin-bottom: 10px;
-                width: 80%;
-                /* Takes up most of the centered area */
-                max-width: 350px;
-                /* But doesn't get too wide on large screens */
-                border: 2px solid #ccc;
-                border-radius: 5px;
-                text-align: center;
-                /* Centers the placeholder text */
-            }
-
-            /* --- The GOLD Button Style --- */
-
+            /* The gold button is now used inside the main bulk panel */
             .gold-button {
                 /* Action color for the Early Access button */
                 background-color: #FFD700;
@@ -422,22 +413,21 @@
             alt="DataXLator™ - The&#0032;privacy&#0045;first&#0044;&#0032;ultra&#0045;fast&#0032;JSON&#0032;↔&#0032;YAML&#0032;config&#0032;converter&#0046; | Product Hunt"
             style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
-    <!-- Link to Contact Us page, absolutely positioned in the upper left corner -->
     <a href="contact.html" style="
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        z-index: 1000; /* Ensure it is above other elements */
-        padding: 10px 15px;
-        background-color: #007ACC; /* Blue accent color */
-        color: white;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: bold;
-        font-family: 'Inter', sans-serif;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-        transition: background-color 0.2s;
-    ">Contact Us</a>
+		position: absolute;
+		top: 20px;
+		left: 20px;
+		z-index: 1000; /* Ensure it is above other elements */
+		padding: 10px 15px;
+		background-color: #007ACC; /* Blue accent color */
+		color: white;
+		text-decoration: none;
+		border-radius: 6px;
+		font-weight: bold;
+		font-family: 'Inter', sans-serif;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+		transition: background-color 0.2s;
+	">Contact Us</a>
 
     <div id="teams-link-container">
         <a id="teams-link" href="teams.html" title="Upgrade to our B2B Teams plan">
@@ -451,6 +441,9 @@
         </button>
         <button id="pro-tab" class="tab-button" onclick="openTab('pro')">
             Pro Features
+        </button>
+        <button id="bulk-pro-tab" class="tab-button" onclick="openTab('bulk-pro')">
+            PRO: Bulk ZIP Conversion
         </button>
     </div>
 
@@ -489,12 +482,34 @@
             </div>
         </div>
 
+        <div id="bulk-pro" class="tab-content">
+            <div class="bulk-converter-pro">
+                <p style="font-size: 1.2em; color: white; margin-bottom: 20px;">**PRO: Bulk ZIP Conversion**</p>
+                <p style="color: #999;">Upload a ZIP file containing JSON, YAML, or CSV files. We will convert all
+                    contents and zip the results for download. **A 7-day free trial is available in the Pro Features tab.**</p>
+
+                <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
+                <button id="bulk-convert-button" title="Upload and convert multiple files">
+                    Bulk Convert Files
+                </button>
+                <div id="bulk-message" style="margin-top: 15px; height: 20px;"></div>
+
+                <div class="pro-content-center">
+                    <p style="font-size: 1.1em; color: #FFD700;">
+                        Ready to use the Bulk Converter right now?
+                    </p>
+                    <button class="gold-button" onclick="openTab('pro')">
+                        Start Your 7-Day Free Trial
+                    </button>
+                </div>
+            </div>
+            </div>
+
         <div id="pro" class="tab-content">
             <div class="pricing-section-pro">
                 <p>Unlock Pro Features:</p>
 
                 <div class="pricing-buttons-row">
-                    <!-- FIX: Changed from <button onclick="window.open(...)"> to <a href="..." target="_blank"> -->
                     <a id="monthly-pro-button" class="pricing-link-button"
                         href="https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00" target="_blank"
                         title="Start a recurring monthly subscription">
@@ -511,26 +526,16 @@
                 <p class="urgent-text">Limited Time Introductory Offer!</p>
             </div>
 
-            <div class="bulk-converter-pro">
-                <p>PRO: Bulk ZIP Conversion</p>
-                <input type="file" id="bulk-file-input" accept=".zip" title="Select a ZIP file to upload">
-                <button id="bulk-convert-button" title="Upload and convert multiple files">
-                    Bulk Convert Files
-                </button>
-                <div id="bulk-message"></div>
-            </div>
-
             <div class="pro-feature-card">
-                <div class="pro-content-center">
+                <div class="pro-content-center" style="border-top: none; padding-top: 0; margin-top: 0;">
                     <h2>🚀 Next Level Tooling: DataXLator Pro</h2>
 
                     <p>We're building the future of API modernization:</p>
 
-                    <p><strong>🔥 Automated SQL CREATE TABLE to GraphQL Schema Conversion.</strong></p>
+                    <p><strong>🔥 COMING SOON: Automated SQL CREATE TABLE to GraphQL Schema Conversion.</strong></p>
 
                     <p class="small-text">Eliminate weeks of manual schema mapping. Get early access and be the first to
-                        know when
-                        it launches!</p>
+                        know when it launches!</p>
 
                     <div class="email-capture-form">
                         <input type="email" id="pro-email-input" placeholder="Enter email for Pro Early Access"
@@ -564,6 +569,9 @@
             document.getElementById(tabName).classList.add("active");
             document.getElementById(tabName + '-tab').classList.add("active");
         }
+
+        // Initialize to the correct tab if needed, though 'free' is active by default in the HTML
+        // openTab('free'); // Can be used to explicitly set the default tab if the HTML structure changes
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
     <script type="module" src="app.js"></script>
