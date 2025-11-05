@@ -423,6 +423,14 @@
             /* Slightly darker gold on hover */
         }
     </style>
+    <!--DX-1: hide panel for GraphQL conversions | David Morales | starts-->
+     <style>
+        /* Step 1 — Hidden class for GraphQL */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+    <!--DX-1: hide panel for GraphQL conversions | David Morales | ends-->
 </head>
 
 <body>
@@ -482,7 +490,7 @@
                             <option value="yaml">YAML</option>
                             <option value="csv">CSV (PRO)</option>
                             <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts -->
-                            <option value="sql">Oracle SQL</option>
+                            <option value="sql">Oracle SQL (PRO)</option>
                             <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends -->
                         </select>
                     </div>
@@ -494,7 +502,7 @@
                             <option value="json">JSON</option>
                             <option value="sql">SQL INSERT (PRO)</option>
                             <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts -->
-                             <option value="graphql">GraphQL</option>
+                             <option value="graphql">GraphQL (PRO)</option>
                             <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends -->
                         </select>
                     </div>
@@ -504,8 +512,15 @@
                     </button>
                 </div>
 
-                <textarea id="output-data" placeholder="Translated data will appear here..." readonly
-                    title="Output Data Area"></textarea>
+                <!-- Story: DXL-1 hide panel for GraphQL conversions | David Morales | starts-->
+                <div id="output-panel">
+                <textarea id="output-data"
+                            placeholder="Translated data will appear here..."
+                            readonly
+                            title="Output Data Area"></textarea>
+                </div>
+                <!-- Story: DXL-1 — hide panel for GraphQL conversions | David Morales | ends-->
+
             </div>
         </div>
 
