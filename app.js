@@ -510,7 +510,9 @@ function translateData() {
     }
 
     // 3. Pro Feature Monetization Check (CSV/SQL)
-    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
+    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') ||
+        (inputFormatValue === 'sql' && outputFormatValue === 'graphql')
+    && !isProUser()) {
         outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab to start your 7-day free trial.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
