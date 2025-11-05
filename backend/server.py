@@ -155,7 +155,7 @@ def csv_to_json(data_str):
     json_data = list(reader)
     return json.dumps(json_data, indent=2)
 
-# ADDED BY DAVID MORALES | DATAAPP-1 | starts
+# Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
 # --- Oracle SQL -> GraphQL helpers (Pro) ---
 ORACLE_TO_GQL = {
     'VARCHAR2':'String','NVARCHAR2':'String','CHAR':'String','CLOB':'String',
@@ -207,7 +207,7 @@ def oracle_sql_to_graphql(sql_text: str) -> str:
     header = "scalar Date\nscalar DateTime\n\n"
     return header + "\n\n".join(types) if types else ""
 
-# ADDED BY DAVID MORALES | DATAAPP-1 | ends
+# Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
 # --- API ENDPOINTS ---
 
 @app.route('/user/<user_id>', methods=['GET'])
