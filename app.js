@@ -1,3 +1,21 @@
+/* ╔════════════════════════════════════════════════════════════════════════════╗
+   ✨ FILE LOG: app.js
+   ──────────────────────────────────────────────────────────────────────────────
+   Company: DataXLator
+   Author: David Morales
+   Date: 2025-11-05
+
+   📜 CHANGE LOG
+   ──────────────────────────────────────────────────────────────────────────────
+   [DXL-1] (2025-11-05)
+   • Added Oracle SQL → GraphQL support to Free converter.
+   • Integrated backend /convert-single route.
+   • Removed Pro-only converter UI and unified logic under Free tab.
+
+   [DXL-1] (Future example)
+   • Add syntax highlighting for GraphQL output in Free converter.
+   ╚════════════════════════════════════════════════════════════════════════════╝ */
+
 // --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -7,6 +25,10 @@ import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, on
 // --- Configuration ---
 // IMPORTANT: This URL is the Render deployment.
 const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
+const API_BASE = 'http://127.0.0.1:5000';
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
+
 
 // --- TRIAL DURATION ---
 const TRIAL_DURATION_DAYS = 7; 
@@ -429,6 +451,51 @@ function translateData() {
     const inputText = inputData.value.trim();
     let inputFormatValue = inputFormat.value; 
     const outputFormatValue = outputFormat.value;
+
+    // DX-1: Oracle SQL → GraphQL (Free Tab calls backend) | David Morales | starts
+    if (inputFormatValue === 'oracle-sql' && outputFormatValue === 'graphql') {
+
+    // basic empty-input guard (keeps your existing behavior)
+    if (!inputText) return;
+
+    // show a quick "working..." message
+    outputData.value = '⏳ Converting Oracle SQL to GraphQL...';
+
+    fetch(`${API_BASE}/convert_pro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+        input_format: 'oracle-sql',
+        output_format: 'graphql',
+        content: inputText
+        })
+    })
+        .then(async (res) => {
+        if (!res.ok) {
+            // bubble up any server JSON error payloads
+            const maybeJson = await res.text();
+            try {
+            const j = JSON.parse(maybeJson);
+            throw new Error(j.error || maybeJson);
+            } catch {
+            throw new Error(maybeJson || `HTTP ${res.status}`);
+            }
+        }
+        return res.json();
+        })
+        .then((data) => {
+        // expect { output: "<graphql schema or op>" }
+        outputData.value = data.output || '';
+        })
+        .catch((err) => {
+        outputData.value = `❌ ${err.message || 'Conversion failed.'}`;
+        inputData.classList.add('error');
+        console.error('[DX-123] OracleSQL→GraphQL error:', err);
+        });
+
+    return; // IMPORTANT: skip the JSON/YAML client-side logic below
+    }
+    // DX-1: Oracle SQL → GraphQL (Free Tab calls backend) | David Morales | ends
     
     // 1. Check for empty input
     if (inputText.length === 0) {
@@ -856,5 +923,63 @@ function initDOMAndListeners() {
     // Initial UI update based on the default false 'isPro' status
     updateUIForProStatus(false);
 }
+
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
+// IDs used in your Free UI (adjust if yours differ)
+const inputSel   = document.getElementById('input-format');
+const outputSel  = document.getElementById('output-format');
+const inputBox   = document.getElementById('input-text')   || document.getElementById('input-data');
+const outputBox  = document.getElementById('output-text')  || document.getElementById('output-data');
+const convertBtn = document.getElementById('convert-btn')  || document.getElementById('execute-convert');
+
+function norm(v) {
+  // normalize labels/values like "Oracle SQL", "oracle-sql", "SQL"
+  return (v || '').toString().trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+async function handleFreeConvert() {
+  const inFmt  = norm(inputSel.value);
+  const outFmt = norm(outputSel.value);
+  const content = inputBox.value || '';
+
+  // ---- Oracle SQL → GraphQL goes to backend ----
+  if (['sql','oracle-sql','oracle'].includes(inFmt) && ['graphql','graph-ql'].includes(outFmt)) {
+    if (!content.trim()) {
+      outputBox.value = 'Please paste your Oracle SQL first.';
+      return;
+    }
+
+    outputBox.value = '⏳ Converting…';
+    try {
+      const res = await fetch(`${API_BASE}/convert-single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputFormat: 'sql',        // what your Flask route expects
+          outputFormat: 'graphql',   // what your Flask route expects
+          content
+        })
+      });
+
+      const text = await res.text();
+      let data; try { data = JSON.parse(text); } catch { data = { error: text }; }
+
+      if (!res.ok || data.error) {
+        outputBox.value = `✗ ${data.error || 'Conversion failed.'}`;
+        return;
+      }
+      outputBox.value = data.converted || '';
+    } catch (e) {
+      outputBox.value = `✗ Network error: ${e}`;
+    }
+    return; // don't fall through to JSON/YAML code
+  }
+
+}
+
+if (convertBtn) {
+  convertBtn.addEventListener('click', handleFreeConvert);
+}
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
 
 document.addEventListener('DOMContentLoaded', initDOMAndListeners);

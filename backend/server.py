@@ -1,3 +1,9 @@
+# ╔═ ✨ ROUTE: /convert-pro (Fallback / Mirror) ═══════════════════════════════════╗
+# Story: DXL-1 — Temporarily mirror Free route for Oracle SQL → GraphQL.
+# Author: David Morales
+# Company: DataXLator
+# Date: 2025-11-05
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 import io
 import json
 import zipfile
@@ -5,6 +11,7 @@ import yaml
 import csv
 import os
 import base64 # Required for decoding Base64 credentials
+import re
 from collections import OrderedDict
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
@@ -148,6 +155,59 @@ def csv_to_json(data_str):
     json_data = list(reader)
     return json.dumps(json_data, indent=2)
 
+# ADDED BY DAVID MORALES | DATAAPP-1 | starts
+# --- Oracle SQL -> GraphQL helpers (Pro) ---
+ORACLE_TO_GQL = {
+    'VARCHAR2':'String','NVARCHAR2':'String','CHAR':'String','CLOB':'String',
+    'NUMBER':'Float','INTEGER':'Int','INT':'Int','FLOAT':'Float',
+    'BINARY_FLOAT':'Float','BINARY_DOUBLE':'Float',
+    'DATE':'Date','TIMESTAMP':'DateTime',
+    'TIMESTAMP WITH TIME ZONE':'DateTime',
+    'TIMESTAMP WITH LOCAL TIME ZONE':'DateTime'
+}
+CREATE_TABLE_RE = re.compile(
+    r'CREATE\s+TABLE\s+(?P<name>"?[\w$#]+"?)\s*\((?P<body>.*?)\)\s*;',
+    re.IGNORECASE | re.DOTALL
+)
+COLUMN_RE = re.compile(
+    r'^\s*(?P<name>"?[\w$#]+"?)\s+(?P<type>[\w\s]+?)(?:\s*\(\s*(?P<len>[^)]+)\s*\))?',
+    re.IGNORECASE
+)
+NOT_NULL_RE = re.compile(r'\bNOT\s+NULL\b', re.IGNORECASE)
+
+def _clean_ident(s):
+    return s.strip().strip('"')
+
+def _oracle_type_to_gql(t, spec):
+    t = ' '.join(t.upper().split())
+    if t.startswith('NUMBER') and spec:
+        parts = [p.strip() for p in spec.split(',')]
+        if len(parts) == 2 and parts[1] == '0':
+            return 'Int'
+    return ORACLE_TO_GQL.get(t, 'String')
+
+def oracle_sql_to_graphql(sql_text: str) -> str:
+    types = []
+    for m in CREATE_TABLE_RE.finditer(sql_text):
+        name = _clean_ident(m.group('name'))
+        body = m.group('body')
+        cols = []
+        for ln in [ln for ln in body.splitlines() if ln.strip()]:
+            cm = COLUMN_RE.match(ln)
+            if not cm:
+                continue
+            cname = _clean_ident(cm.group('name'))
+            ctype = cm.group('type')
+            clen  = cm.group('len')
+            notnull = bool(NOT_NULL_RE.search(ln))
+            gqlt = _oracle_type_to_gql(ctype, clen)
+            cols.append((cname, gqlt, notnull))
+        lines = [f"type {name} "+"{"] + [f"  {c}: {t}{'!' if nn else ''}" for c,t,nn in cols] + ["}"]
+        types.append("\n".join(lines))
+    header = "scalar Date\nscalar DateTime\n\n"
+    return header + "\n\n".join(types) if types else ""
+
+# ADDED BY DAVID MORALES | DATAAPP-1 | ends
 # --- API ENDPOINTS ---
 
 @app.route('/user/<user_id>', methods=['GET'])
@@ -300,5 +360,27 @@ def bulk_convert():
         print(f"Server-side error during bulk conversion: {e}")
         return jsonify({"error": "An internal server error occurred during processing."}), 500
 
+# Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
+@app.route("/convert-single", methods=["POST"])
+def convert_single():
+    """Handle single-file conversions for the Free tab."""
+    data = request.get_json(force=True) or {}
+    input_fmt  = (data.get("inputFormat") or "").lower()
+    output_fmt = (data.get("outputFormat") or "").lower()
+    content    = data.get("content") or ""
+
+    # --- 🔹 Oracle SQL → GraphQL (Free) ---
+    if (input_fmt, output_fmt) == ("sql", "graphql"):
+        try:
+            gql = oracle_sql_to_graphql(content)
+            if not gql.strip():
+                return jsonify({"error": "Could not parse Oracle SQL. Make sure each CREATE TABLE ends with ';'."}), 400
+            return jsonify({"converted": gql})
+        except Exception as e:
+            return jsonify({"error": f"Conversion failed: {e}"}), 500
+
+    # You can add other pairs here later (json↔yaml, csv↔json, etc.)
+    return jsonify({"error": "Unsupported conversion pair."}), 400
+# Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
