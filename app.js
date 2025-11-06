@@ -27,6 +27,7 @@ import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, on
 const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
 // Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
 const API_BASE = 'http://127.0.0.1:5000';
+let lastUserAction = 'none'; // 'typing' | 'convert' | 'format-change'
 // Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
 
 
@@ -151,6 +152,10 @@ const emailInput = document.getElementById('pro-email-input');
 const earlyAccessButton = document.getElementById('early-access-button');
 const emailCaptureForm = document.querySelector('.email-capture-form');
 
+// --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) ---
+
+
+// --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) ---
 
 // --- 2. Analytics Tracking ---
 
@@ -466,78 +471,26 @@ function translateData() {
     let inputFormatValue = inputFormat.value;
     const outputFormatValue = outputFormat.value;
 
-    // DX-1: Oracle SQL → GraphQL (Free Tab calls backend) | David Morales | starts
-    // ───────────────────────────────────────────────────────────────
-    // [DXL-1][DM] Oracle SQL → GraphQL (Pro Feature + Hide Output)
-    // ───────────────────────────────────────────────────────────────
+     // DXL-1: only allow PRO gate on typing/convert (not format-change) | David Morales | starts
     const isOracleSQL = (inputFormatValue === 'oracle-sql' || inputFormatValue === 'sql');
-    const isGraphQL = (outputFormatValue === 'graphql');
+    const isGraphQL   = (outputFormatValue === 'graphql');
+    const triggerable = (lastUserAction === 'typing' || lastUserAction === 'convert');
 
     // --- Step 0: PRO Feature Gate ---
-    if (isOracleSQL && isGraphQL && !isProUser()) {
+    // require content AND proper trigger; do NOT fire on format-change
+    if (triggerable && inputText.length > 0 && isOracleSQL && isGraphQL && !isProUser()) {
         outputData.value =
-            `🛑 PRO FEATURE REQUIRED 🛑
+    `🛑 PRO FEATURE REQUIRED 🛑
 
-This conversion requires DataXLator Pro. 
-Please check the "Pro Features" tab to start your 7-day free trial.`;
+    This conversion requires DataXLator Pro. 
+    Please check the "Pro Features" tab to start your 7-day free trial.`;
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
         if (typeof openTab === 'function') openTab('pro');
-        return; // Block conversion for Free users
+        return;
     }
 
-    // --- Step 1: Handle Oracle SQL → GraphQL Conversion ---
-    if (isOracleSQL && isGraphQL) {
-        if (!inputText) return;
-
-        const outputPanel = document.getElementById('output-panel');
-        // Hide the output box entirely (no visible schema)
-        outputPanel?.classList.add('hidden');
-
-        (async () => {
-            try {
-                const res = await fetch(`${API_BASE}/convert-single`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        inputFormat: 'sql',        // what server.py expects
-                        outputFormat: 'graphql',   // what server.py expects
-                        content: inputText
-                    })
-                });
-
-                const txt = await res.text();
-                let data; try { data = JSON.parse(txt); } catch { data = { error: txt }; }
-
-                if (!res.ok || data.error) {
-                    outputPanel?.classList.remove('hidden');
-                    outputData.value = `❌ ${data.error || 'Conversion failed.'}`;
-                    inputData.classList.add('error');
-                    return;
-                }
-
-                // Don’t show result in UI — copy to clipboard instead
-                try {
-                    await navigator.clipboard.writeText(data.converted || '');
-                    console.log('✅ GraphQL schema copied to clipboard');
-                } catch (_) {
-                    console.warn('Clipboard copy failed — silent fallback');
-                }
-
-                trackEvent('Conversion_Success', { path: 'sql-to-graphql' });
-            } catch (err) {
-                outputPanel?.classList.remove('hidden');
-                outputData.value = `❌ Network error: ${err}`;
-                inputData.classList.add('error');
-            }
-        })();
-
-        return; // IMPORTANT: stop here — don’t fall into JSON/YAML logic
-    }
-    // ───────────────────────────────────────────────────────────────
-    // End DXL-1 Block
-    // ───────────────────────────────────────────────────────────────
-
+    // DXL-1: only allow PRO gate on typing/convert (not format-change) | David Morales | ends
 
     // 1. Check for empty input
     if (inputText.length === 0) {
@@ -551,15 +504,22 @@ Please check the "Pro Features" tab to start your 7-day free trial.`;
         return;
     }
 
+    
     // 3. Pro Feature Monetization Check (CSV/SQL)
-    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql')
-        && !isProUser()) {
+    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
+    // Only redirect to Pro if the user is typing or clicked Convert (not on a format change)
+    if (triggerable && inputText.length > 0) {
         outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab to start your 7-day free trial.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
         if (typeof openTab === 'function') openTab('pro');
-        return; // BLOCK UNLESS PRO
+    } else {
+        // Format-change only: show a gentle hint, no redirect
+        outputData.value = 'This path is a Pro feature. Paste data or click Convert to continue.';
     }
+    return;
+    }
+
 
     let parsedObject = null;
 
@@ -645,6 +605,8 @@ Please check the "Pro Features" tab to start your 7-day free trial.`;
         outputData.value = `Error during final conversion to ${outputFormatValue.toUpperCase()}.\n\nDetails: ${e.message}`;
         outputData.classList.add('error');
     }
+
+    lastUserAction = 'none';
 }
 
 
@@ -926,18 +888,55 @@ function initDOMAndListeners() {
     initFirebase();
 
     // 2. Set up event listeners for the Free Converter
+    // -- Commented out for Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) | starts
+    // if (executeConvertButton) {
+    //     executeConvertButton.addEventListener('click', translateData);
+    // }
+    // if (inputData) {
+    //     inputData.addEventListener('input', translateData);
+    // }
+    // if (inputFormat) {
+    //     inputFormat.addEventListener('change', translateData);
+    // }
+    // if (outputFormat) {
+    //     outputFormat.addEventListener('change', translateData);
+    // }
+    // -- Commented out for Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) | ends
+
+    // --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-214 | David Morales) --- | starts
+        // Convert button → allow redirect
+   // Convert button → allow redirect (handled inside translateData)
     if (executeConvertButton) {
-        executeConvertButton.addEventListener('click', translateData);
+    executeConvertButton.addEventListener('click', () => {
+        lastUserAction = 'convert';
+        translateData();
+    });
     }
+
+    // Typing/pasting → allow redirect (handled inside translateData)
     if (inputData) {
-        inputData.addEventListener('input', translateData);
+    inputData.addEventListener('input', () => {
+        lastUserAction = 'typing';
+        translateData();
+    });
     }
+
+
+    // Format changes → NO redirect, just re-run local logic
     if (inputFormat) {
-        inputFormat.addEventListener('change', translateData);
+    inputFormat.addEventListener('change', () => {
+        lastUserAction = 'format-change';
+        translateData();
+    });
     }
     if (outputFormat) {
-        outputFormat.addEventListener('change', translateData);
+    outputFormat.addEventListener('change', () => {
+        lastUserAction = 'format-change';
+        translateData();
+    });
     }
+
+    // --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-214 | David Morales) --- | ends
 
     // 3. Set up event listener for the PRO Early Access signup (Now Trial Activation)
     if (earlyAccessButton) {
