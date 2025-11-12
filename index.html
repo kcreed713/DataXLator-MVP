@@ -431,6 +431,24 @@
         }
     </style>
     <!--DX-1: hide panel for GraphQL conversions | David Morales | ends-->
+    <!-- DXL-UI: normalize Free converter columns to match prod | David Morales | starts-->
+    <style>
+        :root { --io-height: 420px; }
+
+        /* Stretch both columns to the same height */
+        .free-converter-layout { align-items: stretch; }
+
+        /* Make the right panel behave like the left textarea in flex */
+        .free-converter-layout > #output-panel { flex: 1; display: flex; }
+        #output-panel > textarea { flex: 1; }
+
+        /* Lock identical heights for both textareas */
+        .free-converter-layout textarea {
+            height: var(--io-height);
+            min-height: var(--io-height);
+        }
+    </style>
+    <!-- DXL-UI: normalize Free converter columns to match prod | David Morales | ends-->
 </head>
 
 <body>
