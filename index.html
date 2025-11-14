@@ -1,21 +1,3 @@
-<!-- ╔════════════════════════════════════════════════════════════════════════════╗
-     ✨ FILE LOG: index.html
-     ──────────────────────────────────────────────────────────────────────────────
-     Company: DataXLator
-     Author: David Morales
-     Date: 2025-11-05
-
-     📜 CHANGE LOG
-     ──────────────────────────────────────────────────────────────────────────────
-     [DXL-1] (2025-11-05)
-     • Added Oracle SQL → GraphQL option in Free converter dropdown.
-     • Removed Pro-only converter block and unified UI.
-     • Verified frontend calls /convert-single route successfully.
-
-     [DXL-215] (Future Example)
-     • Add “Copy to Clipboard” button for GraphQL output.
-     ╚════════════════════════════════════════════════════════════════════════════╝ -->
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -423,32 +405,6 @@
             /* Slightly darker gold on hover */
         }
     </style>
-    <!--DX-1: hide panel for GraphQL conversions | David Morales | starts-->
-     <style>
-        /* Step 1 — Hidden class for GraphQL */
-        .hidden {
-            display: none !important;
-        }
-    </style>
-    <!--DX-1: hide panel for GraphQL conversions | David Morales | ends-->
-    <!-- DXL-UI: normalize Free converter columns to match prod | David Morales | starts-->
-    <style>
-        :root { --io-height: 420px; }
-
-        /* Stretch both columns to the same height */
-        .free-converter-layout { align-items: stretch; }
-
-        /* Make the right panel behave like the left textarea in flex */
-        .free-converter-layout > #output-panel { flex: 1; display: flex; }
-        #output-panel > textarea { flex: 1; }
-
-        /* Lock identical heights for both textareas */
-        .free-converter-layout textarea {
-            height: var(--io-height);
-            min-height: var(--io-height);
-        }
-    </style>
-    <!-- DXL-UI: normalize Free converter columns to match prod | David Morales | ends-->
 </head>
 
 <body>
@@ -507,9 +463,6 @@
                             <option value="json">JSON</option>
                             <option value="yaml">YAML</option>
                             <option value="csv">CSV (PRO)</option>
-                            <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts -->
-                            <option value="sql">Oracle SQL (PRO)</option>
-                            <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends -->
                         </select>
                     </div>
 
@@ -519,9 +472,6 @@
                             <option value="yaml">YAML</option>
                             <option value="json">JSON</option>
                             <option value="sql">SQL INSERT (PRO)</option>
-                            <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts -->
-                             <option value="graphql">GraphQL (PRO)</option>
-                            <!-- Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends -->
                         </select>
                     </div>
 
@@ -530,15 +480,8 @@
                     </button>
                 </div>
 
-                <!-- Story: DXL-1 hide panel for GraphQL conversions | David Morales | starts-->
-                <div id="output-panel">
-                <textarea id="output-data"
-                            placeholder="Translated data will appear here..."
-                            readonly
-                            title="Output Data Area"></textarea>
-                </div>
-                <!-- Story: DXL-1 — hide panel for GraphQL conversions | David Morales | ends-->
-
+                <textarea id="output-data" placeholder="Translated data will appear here..." readonly
+                    title="Output Data Area"></textarea>
             </div>
         </div>
 
