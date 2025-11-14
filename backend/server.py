@@ -1,3 +1,9 @@
+# ╔═ ✨ ROUTE: /convert-pro (Fallback / Mirror) ═══════════════════════════════════╗
+# Story: DXL-1 — Temporarily mirror Free route for Oracle SQL → GraphQL.
+# Author: David Morales
+# Company: DataXLator
+# Date: 2025-11-05
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 import io
 import json
 import zipfile
