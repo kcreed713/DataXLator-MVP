@@ -1,3 +1,21 @@
+/* ╔════════════════════════════════════════════════════════════════════════════╗
+   ✨ FILE LOG: app.js
+   ──────────────────────────────────────────────────────────────────────────────
+   Company: DataXLator
+   Author: David Morales
+   Date: 2025-11-05
+
+   📜 CHANGE LOG
+   ──────────────────────────────────────────────────────────────────────────────
+   [DXL-1] (2025-11-05)
+   • Added Oracle SQL → GraphQL support to Free converter.
+   • Integrated backend /convert-single route.
+   • Removed Pro-only converter UI and unified logic under Free tab.
+
+   [DXL-1] (Future example)
+   • Add syntax highlighting for GraphQL output in Free converter.
+   ╚════════════════════════════════════════════════════════════════════════════╝ */
+
 // --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -7,9 +25,14 @@ import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, on
 // --- Configuration ---
 // IMPORTANT: This URL is the Render deployment.
 const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | starts
+const API_BASE = 'http://127.0.0.1:5000';
+let lastUserAction = 'none'; // 'typing' | 'convert' | 'format-change'
+// Story: DXL-1 — Add single-file conversion for Oracle SQL → GraphQL (Free) | David Morales | ends
+
 
 // --- TRIAL DURATION ---
-const TRIAL_DURATION_DAYS = 7; 
+const TRIAL_DURATION_DAYS = 7;
 // ------------------------------------
 
 // --- GLOBAL FIREBASE INSTANCES & STATE ---
@@ -22,6 +45,20 @@ let trialExpiresAt = null; // To track trial expiry timestamp (in milliseconds)
 
 // Set Firestore log level to Debug for visibility in the console
 setLogLevel('debug');
+//Story:DXL-1 | Hiding ouput | David M | starts
+const outputPanel = document.getElementById('output-panel');
+const inputFormatSelect  = document.getElementById('input-format');
+const outputFormatSelect = document.getElementById('output-format');
+
+function updateOutputVisibility() {
+  const isGraphQL = (outputFormatSelect?.value || '').toLowerCase() === 'graphql';
+  if (!isGraphQL) outputPanel?.classList.remove('hidden');
+}
+document.addEventListener('DOMContentLoaded', updateOutputVisibility);
+inputFormatSelect?.addEventListener('change', updateOutputVisibility);
+outputFormatSelect?.addEventListener('change', updateOutputVisibility);
+
+//Story:DXL-1 | Hiding ouput | David M | ends
 
 /**
  * Initializes Firebase and authenticates the user anonymously for production use.
@@ -39,7 +76,7 @@ async function initFirebase() {
         messagingSenderId: "496498133573",
         appId: "1:496498133573:web:c33b441097afa8db72312c"
     };
-    
+
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
@@ -51,14 +88,14 @@ async function initFirebase() {
     } catch (error) {
         console.error("Firebase Anonymous Authentication failed:", error);
     }
-    
+
     // Listen for auth state changes and set the user ID
     onAuthStateChanged(auth, (user) => {
         if (user) {
             userId = user.uid;
             isAuthReady = true;
             console.log(`Auth Ready. User ID: ${userId} (Source: Anonymous Auth)`);
-            
+
             // Start the real-time Pro status listener
             setupProStatusListener();
 
@@ -86,7 +123,7 @@ async function ensureUserDocumentExists(uid) {
     const statusDocRef = doc(db, `users/${uid}/subscriptions/dataxlator`);
 
     try {
-        await setDoc(statusDocRef, { 
+        await setDoc(statusDocRef, {
             isPro: false,
             createdAt: serverTimestamp(),
             lastLogin: serverTimestamp(),
@@ -115,6 +152,10 @@ const emailInput = document.getElementById('pro-email-input');
 const earlyAccessButton = document.getElementById('early-access-button');
 const emailCaptureForm = document.querySelector('.email-capture-form');
 
+// --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) ---
+
+
+// --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) ---
 
 // --- 2. Analytics Tracking ---
 
@@ -126,9 +167,9 @@ const emailCaptureForm = document.querySelector('.email-capture-form');
  */
 function trackEvent(eventName, eventData = {}) {
     console.log(`[ANALYTICS] Tracking Event: ${eventName}`, eventData);
-    
+
     // GA4 IMPLEMENTATION: Check if the gtag function exists before calling it
-    if (typeof gtag === 'function') { 
+    if (typeof gtag === 'function') {
         gtag('event', eventName, eventData);
     }
 }
@@ -185,13 +226,13 @@ async function activateTrial(email) {
         // Calculate expiry timestamp
         const expiresMs = now + (TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
         const expiresTimestamp = Timestamp.fromMillis(expiresMs);
-        
+
         // 1. Set the trial status in the user's subscription document
         await setDoc(subscriptionRef, {
             isPro: true,
             updatedAt: serverTimestamp(),
             // CRITICAL: Set the expiration time in Firestore
-            expiresAt: expiresTimestamp, 
+            expiresAt: expiresTimestamp,
             status: 'trial_active',
             trialStart: serverTimestamp(),
         }, { merge: true });
@@ -206,7 +247,7 @@ async function activateTrial(email) {
 
         // The listener will pick up the change and update the UI immediately
         trackEvent('Trial_Activation_Success');
-        
+
     } catch (error) {
         console.error("Error saving email or activating trial:", error);
         throw new Error("Could not activate trial. Check console for details.");
@@ -222,7 +263,7 @@ async function handleEarlyAccessSignup() {
     // We access the email input and button from the global DOM selection section (1)
     const email = emailInput ? emailInput.value.trim() : '';
     // Use the status message div in the Pro tab
-    const statusMessageElement = document.getElementById('pro-status-message'); 
+    const statusMessageElement = document.getElementById('pro-status-message');
 
     if (!statusMessageElement) {
         console.error("Status message element not found.");
@@ -246,21 +287,21 @@ async function handleEarlyAccessSignup() {
         earlyAccessButton.disabled = true;
         earlyAccessButton.textContent = 'Activating Trial...';
     }
-    
+
     statusMessageElement.textContent = "Processing...";
     statusMessageElement.style.color = '#FFD700'; // Processing color
 
     try {
         // --- CRITICAL CHANGE: Activate the 7-day trial ---
         await activateTrial(email);
-        
+
         statusMessageElement.textContent = "Success! Free 7-Day Pro Trial Activated!";
         statusMessageElement.style.color = '#4CAF50'; // Green for success
         if (emailInput) emailInput.value = ''; // Clear the input
-        
+
         // Hide the form on success
         if (emailCaptureForm) {
-            emailCaptureForm.style.display = 'none'; 
+            emailCaptureForm.style.display = 'none';
         }
 
     } catch (error) {
@@ -268,16 +309,16 @@ async function handleEarlyAccessSignup() {
         console.error("Error activating trial:", error);
         statusMessageElement.textContent = `Error: ${error.message}`;
         statusMessageElement.style.color = '#D32F2F'; // Red for error
-        
+
         // Re-enable button on failure
         if (earlyAccessButton) {
-            earlyAccessButton.disabled = false; 
-            earlyAccessButton.textContent = 'Start Free Trial'; 
+            earlyAccessButton.disabled = false;
+            earlyAccessButton.textContent = 'Start Free Trial';
         }
     } finally {
         if (earlyAccessButton && statusMessageElement.style.color === '#4CAF50') {
-             // Keep the button disabled and updated for a successful, one-time submission
-             earlyAccessButton.textContent = 'Trial Active!';
+            // Keep the button disabled and updated for a successful, one-time submission
+            earlyAccessButton.textContent = 'Trial Active!';
         }
     }
 }
@@ -295,7 +336,7 @@ function updateBulkUI() {
         } else {
             bulkConvertButton.disabled = false; // Soft Gate: allow click to prompt for trial
             bulkMessage.textContent = 'Bulk Conversion is a Pro Feature. Click "Bulk Convert" to start your free trial.';
-            bulkMessage.style.color = '#999'; 
+            bulkMessage.style.color = '#999';
         }
     }
 }
@@ -316,21 +357,21 @@ function csvToJSON(csvText) {
 
     const headerLine = lines[0];
     if (!headerLine.includes(',')) {
-        return []; 
+        return [];
     }
 
     // Extract headers (first line) and sanitize them (trim, remove quotes)
     const headers = headerLine.split(',').map(h => h.trim().replace(/^['"]|['"]$/g, ''));
     const result = [];
-    
+
     for (let i = 1; i < lines.length; i++) {
         if (lines[i].trim() === '') continue;
 
-        const values = lines[i].split(','); 
+        const values = lines[i].split(',');
         const obj = {};
         for (let j = 0; j < headers.length; j++) {
-            const value = values[j] ? values[j].trim().replace(/^['"]|['"]$/g, '') : ''; 
-            
+            const value = values[j] ? values[j].trim().replace(/^['"]|['"]$/g, '') : '';
+
             // Simple type coercion
             if (!isNaN(value) && value.trim() !== '') {
                 obj[headers[j]] = Number(value);
@@ -369,14 +410,14 @@ function jsonToSQL(records, tableName = 'dataxlator_records') {
         if (value === null || value === undefined) {
             return 'NULL';
         }
-        
+
         // Handle complex objects and arrays by serializing to JSON string
         if (typeof value === 'object') {
             const jsonString = JSON.stringify(value);
             // Escape single quotes within the JSON string and wrap the whole thing in SQL quotes
             return `'${jsonString.replace(/'/g, "''")}'`;
         }
-        
+
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value);
         }
@@ -424,17 +465,38 @@ function tryParseJSON(str) {
 function translateData() {
     outputData.value = ''; // Clear output initially
     inputData.classList.remove('error'); // Clear input error state
-    outputData.classList.remove('error'); 
+    outputData.classList.remove('error');
 
     const inputText = inputData.value.trim();
-    let inputFormatValue = inputFormat.value; 
+    let inputFormatValue = inputFormat.value;
     const outputFormatValue = outputFormat.value;
-    
+
+     // DXL-1: only allow PRO gate on typing/convert (not format-change) | David Morales | starts
+    const isOracleSQL = (inputFormatValue === 'oracle-sql' || inputFormatValue === 'sql');
+    const isGraphQL   = (outputFormatValue === 'graphql');
+    const triggerable = (lastUserAction === 'typing' || lastUserAction === 'convert');
+
+    // --- Step 0: PRO Feature Gate ---
+    // require content AND proper trigger; do NOT fire on format-change
+    if (triggerable && inputText.length > 0 && isOracleSQL && isGraphQL && !isProUser()) {
+        outputData.value =
+    `🛑 PRO FEATURE REQUIRED 🛑
+
+    This conversion requires DataXLator Pro. 
+    Please check the "Pro Features" tab to start your 7-day free trial.`;
+        inputData.classList.add('error');
+        trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
+        if (typeof openTab === 'function') openTab('pro');
+        return;
+    }
+
+    // DXL-1: only allow PRO gate on typing/convert (not format-change) | David Morales | ends
+
     // 1. Check for empty input
     if (inputText.length === 0) {
         return; // Do nothing if input is empty
     }
-    
+
     // 2. Prevent conversion to the same format (UX Improvement)
     if (inputFormatValue === outputFormatValue) {
         outputData.value = '❌ Input and Output formats are the same. Please select different formats.';
@@ -442,19 +504,27 @@ function translateData() {
         return;
     }
 
+    
     // 3. Pro Feature Monetization Check (CSV/SQL)
     if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
+    // Only redirect to Pro if the user is typing or clicked Convert (not on a format change)
+    if (triggerable && inputText.length > 0) {
         outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab to start your 7-day free trial.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
         if (typeof openTab === 'function') openTab('pro');
-        return; // BLOCK UNLESS PRO
+    } else {
+        // Format-change only: show a gentle hint, no redirect
+        outputData.value = 'This path is a Pro feature. Paste data or click Convert to continue.';
     }
-        
+    return;
+    }
+
+
     let parsedObject = null;
 
     // --- CORE LOGIC (PARSING/INPUT STAGE) ---
-    
+
     if (inputFormatValue === 'csv') {
         // PRO: Convert CSV to a standard JavaScript Array of Objects
         try {
@@ -470,21 +540,21 @@ function translateData() {
             try {
                 // jsyaml.load is expected to be available
                 parsedObject = jsyaml.load(inputText);
-                
+
                 // Check for primitive types (like simple string from CSV)
                 if (typeof parsedObject !== 'object' || parsedObject === null) {
                     if (!Array.isArray(parsedObject) || parsedObject.length !== 0) {
                         throw new Error("Input could not be parsed as a structured YAML object or array.");
                     }
                 }
-                
+
             } catch (e) {
                 outputData.value = `❌ YAML Parsing Error: ${e.message}`;
                 inputData.classList.add('error');
                 trackEvent('Conversion_Error', { conversion: 'yaml-parse', error: e.message });
                 return;
             }
-        
+
         } else {
             // If user chose 'json' or 'select', attempt JSON parsing first for robustness
             const jsonCandidate = tryParseJSON(inputText);
@@ -493,10 +563,10 @@ function translateData() {
                 // If it's valid JSON, we MUST treat the input as JSON.
                 inputFormatValue = 'json';
                 parsedObject = jsonCandidate;
-            } 
+            }
         }
     }
-    
+
     // 4. Handle Parsing Failure 
     if (parsedObject === null || (Array.isArray(parsedObject) && parsedObject.length === 0)) {
         outputData.value = `❌ Could not parse input as ${inputFormatValue.toUpperCase()}. Please check your syntax/structure.`;
@@ -509,7 +579,7 @@ function translateData() {
 
     let outputText = '';
     let conversionPath = `${inputFormatValue}-to-${outputFormatValue}`;
-    
+
     try {
         if (outputFormatValue === 'sql') {
             // PRO: Convert parsed object (expected to be an Array of Objects from CSV/JSON) to SQL.
@@ -523,9 +593,9 @@ function translateData() {
 
         } else if (outputFormatValue === 'json') {
             // Convert JS object back to JSON string (formatted with 2-space indentation)
-            outputText = JSON.stringify(parsedObject, null, 2); 
-        } 
-        
+            outputText = JSON.stringify(parsedObject, null, 2);
+        }
+
         outputData.value = outputText;
         trackEvent('Conversion_Success', { path: conversionPath });
 
@@ -535,6 +605,8 @@ function translateData() {
         outputData.value = `Error during final conversion to ${outputFormatValue.toUpperCase()}.\n\nDetails: ${e.message}`;
         outputData.classList.add('error');
     }
+
+    lastUserAction = 'none';
 }
 
 
@@ -547,19 +619,19 @@ async function handleBulkConversion() {
     // --- Soft Trial Gate Check ---
     if (!isProUser()) {
         bulkMessage.textContent = '🔒 Start your 7-day free trial to unlock bulk conversion!';
-        bulkMessage.style.color = '#FFC107'; 
+        bulkMessage.style.color = '#FFC107';
         if (typeof openTab === 'function') openTab('pro');
-        return; 
+        return;
     }
-    
-    bulkMessage.textContent = ''; 
+
+    bulkMessage.textContent = '';
     const files = bulkFileInput.files;
-    
+
     if (files.length === 0) {
         bulkMessage.textContent = 'Please select a ZIP file to upload.';
         return;
     }
-    
+
     if (files.length > 1) {
         bulkMessage.textContent = 'Only one ZIP file can be uploaded at a time.';
         return;
@@ -568,13 +640,13 @@ async function handleBulkConversion() {
     const zipFile = files[0];
     const formData = new FormData();
     formData.append('zip_file', zipFile);
-    
+
     trackEvent('PRO_Bulk_Conversion_Attempt', { conversion: 'BULK_API_CALL' });
 
     bulkConvertButton.disabled = true;
     bulkMessage.textContent = 'Processing files... please wait (up to 30 seconds for large files).';
     bulkMessage.style.color = '#FFD700'; // Yellow/Processing color
-    
+
     // 1. Check if the user ID is available
     if (!userId) {
         bulkMessage.textContent = '❌ Authentication Error: User ID is missing.';
@@ -584,7 +656,7 @@ async function handleBulkConversion() {
     }
 
     // 2. Construct the dynamic API URL with the userId query parameter
-    const dynamicApiUrl = `${BULK_API_URL}?user_id=${userId}`; 
+    const dynamicApiUrl = `${BULK_API_URL}?user_id=${userId}`;
 
     try {
         // Use the new dynamic URL in the fetch request
@@ -598,13 +670,13 @@ async function handleBulkConversion() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'dataxlator_converted_files.zip'; 
-            
+            a.download = 'dataxlator_converted_files.zip';
+
             document.body.appendChild(a);
             a.click();
-            
-            window.URL.revokeObjectURL(url); 
-            document.body.removeChild(a); 
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
             bulkMessage.textContent = 'Download started successfully!';
             bulkMessage.style.color = '#4CAF50'; // Green/Success color
             bulkFileInput.value = null; // Clear file input
@@ -612,7 +684,7 @@ async function handleBulkConversion() {
         } else {
             const errorText = await response.text();
             let errorMessage = `API Error (${response.status}): ${errorText}`;
-            
+
             try {
                 const errorJson = JSON.parse(errorText);
                 // The server sends back {"error": "Access Denied..."}
@@ -631,7 +703,7 @@ async function handleBulkConversion() {
         bulkMessage.style.color = '#D32F2F';
     } finally {
         bulkConvertButton.disabled = false;
-    } 
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -706,12 +778,12 @@ function updateUIForProStatus(newIsPro) {
 
     if (csvProOption) {
         // Hard-gate disabled. We rely on the check inside translateData to gate.
-        csvProOption.disabled = false; 
+        csvProOption.disabled = false;
         csvProOption.textContent = isPro ? 'CSV' : 'CSV (PRO)';
     }
 
     if (sqlProOption) {
-         // Hard-gate disabled. We rely on the check inside translateData to gate.
+        // Hard-gate disabled. We rely on the check inside translateData to gate.
         sqlProOption.disabled = false;
         sqlProOption.textContent = isPro ? 'SQL INSERT' : 'SQL INSERT (PRO)';
     }
@@ -741,20 +813,20 @@ function updateUIForProStatus(newIsPro) {
 
         // B. Show the one-time welcome notification.
         showProWelcomeNotification();
-        
+
         // C. If the form is visible (i.e., they just activated a trial), hide it
         if (emailCaptureForm) {
-            emailCaptureForm.style.display = 'none'; 
+            emailCaptureForm.style.display = 'none';
             const statusMessageElement = document.getElementById('pro-status-message');
-            if(statusMessageElement) {
+            if (statusMessageElement) {
                 statusMessageElement.textContent = "Your 7-day free trial is active!";
                 statusMessageElement.style.color = '#4CAF50';
             }
         }
     } else {
         // If status reverts to false (e.g., trial expired)
-         if (emailCaptureForm) {
-            emailCaptureForm.style.display = 'block'; 
+        if (emailCaptureForm) {
+            emailCaptureForm.style.display = 'block';
         }
     }
 }
@@ -768,7 +840,7 @@ function setupProStatusListener() {
         console.error("Cannot set up Pro listener: DB or User ID is missing.");
         return;
     }
-    
+
     // Production Path: users/{userId}/subscriptions/dataxlator
     const statusDocRef = doc(db, `users/${userId}/subscriptions/dataxlator`);
 
@@ -780,19 +852,19 @@ function setupProStatusListener() {
         if (docSnap.exists()) {
             const userData = docSnap.data();
             newIsPro = userData.isPro === true;
-            
+
             // CRITICAL: Check and set the trial expiration time
             if (userData.expiresAt && userData.expiresAt.toMillis) {
                 trialExpiresAt = userData.expiresAt.toMillis();
             } else {
                 trialExpiresAt = null; // Permanent Pro user (or no trial)
             }
-            
+
             // If the Pro flag is set (newIsPro is true) but the trial time is in the past, reset newIsPro.
             // This is the core trial expiry check.
             if (newIsPro && trialExpiresAt && Date.now() > trialExpiresAt) {
-                 console.log("Trial expired, reverting status.");
-                 newIsPro = false;
+                console.log("Trial expired, reverting status.");
+                newIsPro = false;
             }
         }
 
@@ -814,26 +886,63 @@ function setupProStatusListener() {
 function initDOMAndListeners() {
     // 1. Initialize Firebase and Authentication
     initFirebase();
-    
+
     // 2. Set up event listeners for the Free Converter
+    // -- Commented out for Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) | starts
+    // if (executeConvertButton) {
+    //     executeConvertButton.addEventListener('click', translateData);
+    // }
+    // if (inputData) {
+    //     inputData.addEventListener('input', translateData);
+    // }
+    // if (inputFormat) {
+    //     inputFormat.addEventListener('change', translateData);
+    // }
+    // if (outputFormat) {
+    //     outputFormat.addEventListener('change', translateData);
+    // }
+    // -- Commented out for Instant PRO redirect for Oracle SQL → GraphQL (DXL-1 | David Morales) | ends
+
+    // --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-214 | David Morales) --- | starts
+        // Convert button → allow redirect
+   // Convert button → allow redirect (handled inside translateData)
     if (executeConvertButton) {
-        executeConvertButton.addEventListener('click', translateData);
+    executeConvertButton.addEventListener('click', () => {
+        lastUserAction = 'convert';
+        translateData();
+    });
     }
+
+    // Typing/pasting → allow redirect (handled inside translateData)
     if (inputData) {
-        inputData.addEventListener('input', translateData); 
+    inputData.addEventListener('input', () => {
+        lastUserAction = 'typing';
+        translateData();
+    });
     }
+
+
+    // Format changes → NO redirect, just re-run local logic
     if (inputFormat) {
-        inputFormat.addEventListener('change', translateData);
+    inputFormat.addEventListener('change', () => {
+        lastUserAction = 'format-change';
+        translateData();
+    });
     }
     if (outputFormat) {
-        outputFormat.addEventListener('change', translateData);
+    outputFormat.addEventListener('change', () => {
+        lastUserAction = 'format-change';
+        translateData();
+    });
     }
-    
+
+    // --- Instant PRO redirect for Oracle SQL → GraphQL (DXL-214 | David Morales) --- | ends
+
     // 3. Set up event listener for the PRO Early Access signup (Now Trial Activation)
     if (earlyAccessButton) {
         earlyAccessButton.addEventListener('click', handleEarlyAccessSignup);
         // Update button text to reflect the new trial gate goal
-        earlyAccessButton.textContent = 'Start 7-Day Free Trial'; 
+        earlyAccessButton.textContent = 'Start 7-Day Free Trial';
     }
 
     // 4. Set up event listener for Bulk Conversion (Pro Feature Soft Gate)
@@ -852,9 +961,11 @@ function initDOMAndListeners() {
         statusDiv.style.color = '#5a67d8'; // Blue color for a call to action
         emailCaptureForm.parentNode.insertBefore(statusDiv, emailCaptureForm);
     }
-    
+
     // Initial UI update based on the default false 'isPro' status
     updateUIForProStatus(false);
 }
+
+
 
 document.addEventListener('DOMContentLoaded', initDOMAndListeners);
