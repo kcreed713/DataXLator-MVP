@@ -3,7 +3,7 @@
 # Author: David Morales
 # Company: DataXLator
 # Date: 2025-11-05
-# Story: DXL-2 — Temporarily mirror Free route for Mysql → GraphQL.
+# Story: DXL-2 — expanded the _mysql_select_to_graphql functionality
 # Author: David Morales
 # Company: DataXLator
 # Date: 2025-11-14
