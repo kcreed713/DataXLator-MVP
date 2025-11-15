@@ -7,6 +7,10 @@
 # Author: David Morales
 # Company: DataXLator
 # Date: 2025-11-14
+# Story: DXL-3 — Optimize code for Mysql to GraphQL
+# Author: David Morales
+# Company: DataXLator
+# Date: 2025-11-15
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 import io
 import json
@@ -57,6 +61,66 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Load the webhook secret securely from environment variables
 WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'NO_SECRET_SET')
 print(f"Webhook Secret Status: {'Set' if WEBHOOK_SECRET != 'NO_SECRET_SET' else 'MISSING'}")
+
+#DXL-3 | David Morales | starts
+# --- MySQL → GraphQL regex patterns (precompiled) ---
+
+CREATE_TABLE_RE = re.compile(
+    r"""
+    CREATE\s+TABLE
+    (?:\s+IF\s+NOT\s+EXISTS)?
+    \s+(?P<name>`?[\w]+`?(?:\.`?[\w]+`?)?)
+    \s*\(
+        (?P<body>.*?)
+    \)
+    (?:\s+ENGINE\b.*)?
+    \s*$
+    """,
+    flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+SELECT_RE = re.compile(
+    r"""
+        SELECT\s+(?P<select>.+?)\s+
+        FROM\s+(?P<from>.+?)
+        (?:\s+WHERE\s+(?P<where>.+?))?
+        (?:\s+GROUP\s+BY\s+(?P<groupby>.+?))?
+        (?:\s+ORDER\s+BY\s+(?P<orderby>.+?))?
+        (?:\s+LIMIT\s+(?P<limit>.+?))?
+        $
+    """,
+    flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+INSERT_RE = re.compile(
+    r"""
+        INSERT\s+INTO\s+`?(?P<table>\w+)`?
+        \s*(?:\((?P<cols>[^)]+)\))?
+        \s*VALUES\s*(?P<values>.+)
+    """,
+    flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+UPDATE_RE = re.compile(
+    r"""
+        UPDATE\s+`?(?P<table>\w+)`?
+        \s+SET\s+(?P<set>.+?)
+        (?:\s+WHERE\s+(?P<where>.+))?
+        $
+    """,
+    flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+DELETE_RE = re.compile(
+    r"""
+        DELETE\s+FROM\s+`?(?P<table>\w+)`?
+        (?:\s+WHERE\s+(?P<where>.+))?
+        $
+    """,
+    flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+
+#DXL-3 | David Morales | ends
 
 #DXL-1 | David Morales | starts
 
@@ -168,46 +232,55 @@ def csv_to_json(data_str):
     return json.dumps(json_data, indent=2)
 
 #DXL-1 | David Morales | starts
+#DXL-3 | David Morales | starts | optimizing mysql_to_graphql
 def mysql_to_graphql(sql_str: str) -> str:
     """
     Best-effort MySQL → GraphQL converter.
-    Supports:
-      - CREATE TABLE ... → GraphQL type
-      - Simple SELECT ... FROM ... [WHERE ...] → query
-      - INSERT / UPDATE / DELETE → mutation stubs
 
-    It NEVER raises on bad SQL; instead it returns commented stubs.
+    - Supports:
+        * CREATE TABLE ...  → GraphQL type
+        * SELECT ...        → GraphQL query (enhanced parser)
+        * INSERT/UPDATE/DELETE → mutation-style stubs
+    - Accepts multiple statements separated by ';'
+    - Never raises on bad SQL – returns commented stubs instead.
     """
     raw = (sql_str or "").strip()
     if not raw:
         return "# Empty SQL input\n"
 
-    # Allow multiple statements separated by ';'
-    statements = [s.strip() for s in raw.split(';') if s.strip()]
-    parts = []
+    # Very lightweight split on ';' – good enough for your current scope.
+    statements = [s.strip() for s in raw.split(";") if s.strip()]
+    if not statements:
+        return "# No SQL statements found.\n"
+
+    outputs: list[str] = []
 
     for stmt in statements:
-        up = stmt.lstrip().upper()
+        stripped = stmt.lstrip()
+        if not stripped:
+            continue
 
-        if up.startswith("CREATE TABLE"):
-            parts.append(_mysql_create_table_to_graphql(stmt))
-        elif up.startswith("SELECT"):
-            parts.append(_mysql_select_to_graphql(stmt))
-        elif up.startswith("INSERT"):
-            parts.append(_mysql_insert_to_graphql(stmt))
-        elif up.startswith("UPDATE"):
-            parts.append(_mysql_update_to_graphql(stmt))
-        elif up.startswith("DELETE"):
-            parts.append(_mysql_delete_to_graphql(stmt))
+        keyword = stripped.split(None, 1)[0].upper()
+
+        if keyword == "CREATE":
+            outputs.append(_mysql_create_table_to_graphql(stmt))
+        elif keyword == "SELECT":
+            outputs.append(_mysql_select_to_graphql(stmt))
+        elif keyword == "INSERT":
+            outputs.append(_mysql_insert_to_graphql(stmt))
+        elif keyword == "UPDATE":
+            outputs.append(_mysql_update_to_graphql(stmt))
+        elif keyword == "DELETE":
+            outputs.append(_mysql_delete_to_graphql(stmt))
         else:
-            parts.append(
+            outputs.append(
                 "# Unsupported SQL statement; adjust manually.\n"
                 "# " + stmt.replace("\n", "\n# ")
             )
 
-    return "\n\n".join(parts)
-
-
+    return "\n\n".join(outputs) + "\n"
+#DXL-3 | David Morales | ends | optimizing mysql_to_graphql
+#DXL-3 | David Morales | starts
 def _dxl_to_pascal(name: str) -> str:
     parts = re.split(r"[_\s]+", name)
     return "".join(p.capitalize() for p in parts if p)
@@ -230,31 +303,35 @@ def _dxl_singular(name: str) -> str:
     return name
 
 
+def _mysql_sql_type_to_graphql(sql_type: str) -> str:
+    t = sql_type.upper()
+    if t.startswith(("INT", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT")):
+        return "Int"
+    if t.startswith(("DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL")):
+        return "Float"
+    if any(x in t for x in ("CHAR", "TEXT", "CLOB")):
+        return "String"
+    if any(x in t for x in ("BLOB", "BINARY", "VARBINARY")):
+        return "String"
+    if "BOOL" in t:
+        return "Boolean"
+    if any(x in t for x in ("DATE", "TIME", "TIMESTAMP", "YEAR")):
+        return "String"
+    return "String"
+
+#DXL-3 | David Morales | ends
+
+#DXL-3 | David Morales | starts | optimize _mysql_create_table_to_graphql
 def _mysql_create_table_to_graphql(stmt: str) -> str:
-    """
-    CREATE TABLE → GraphQL type
-    Handles:
-      CREATE TABLE [IF NOT EXISTS] `schema`.`table` ( ... ) ENGINE=...
-    """
     sql = stmt.strip()
-    pattern = r"""
-        CREATE\s+TABLE
-        (?:\s+IF\s+NOT\s+EXISTS)?
-        \s+(?P<name>`?[\w]+`?(?:\.`?[\w]+`?)?)
-        \s*\(
-            (?P<body>.*?)
-        \)
-        (?:\s+ENGINE\b.*)?
-        \s*$
-    """
-    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    m = CREATE_TABLE_RE.search(sql)
     if not m:
         return "# Could not parse CREATE TABLE.\n# " + sql.replace("\n", "\n# ")
 
     full_name = m.group("name")
     body = m.group("body")
 
-    # schema.table → take last part
+    # schema.table → last part
     if "." in full_name:
         table_name_raw = full_name.split(".")[-1]
     else:
@@ -265,10 +342,11 @@ def _mysql_create_table_to_graphql(stmt: str) -> str:
     gql_type_name = _dxl_to_pascal(singular)
 
     lines = [ln.strip().rstrip(",") for ln in body.splitlines() if ln.strip()]
-    fields = []
+    fields: list[str] = []
 
     for line in lines:
         upper = line.upper()
+        # Ignore table-level constraints / indexes
         if upper.startswith((
             "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "KEY",
             "CONSTRAINT", "INDEX", "FULLTEXT", "SPATIAL"
@@ -286,7 +364,7 @@ def _mysql_create_table_to_graphql(stmt: str) -> str:
 
         gql_type = _mysql_sql_type_to_graphql(sql_type)
 
-        # id / <table>_id → ID
+        # id / <singular>_id → ID
         if col_name_raw.lower() in ("id", f"{singular.lower()}_id"):
             gql_type = "ID"
 
@@ -301,51 +379,28 @@ def _mysql_create_table_to_graphql(stmt: str) -> str:
 
     return f"type {gql_type_name} {{\n" + "\n".join(fields) + "\n}"
 
-#DXL-2 | David Morales | starts
+#DXL-3 | David Morales | ends | optimize _mysql_create_table_to_graphql
+
+#DXL-3 | David Morales | starts | optimize _mysql_select_to_graphql
 def _mysql_select_to_graphql(stmt: str) -> str:
     """
     Enhanced SELECT → GraphQL query.
 
     Supports:
-      - Table aliases      (FROM users u)
-      - Column aliases     (u.id AS userId)
-      - Prefixed columns   (u.email)
-      - Multiple tables / JOINs (JOIN orders o ON o.user_id = u.id)
-      - GROUP BY
-      - ORDER BY
-      - LIMIT
-
-    Strategy:
-      - Pick the FIRST table in the FROM as the GraphQL root field.
-      - Flatten selected columns into a single selection set.
-      - Keep JOIN / GROUP BY / ORDER BY / LIMIT in comments for context.
+      - Table aliases (FROM users u)
+      - Column aliases (u.id AS userId)
+      - Prefixed columns (u.email)
+      - Simple JOINs (JOIN orders o ON ...)
+      - GROUP BY / ORDER BY / LIMIT (as comments)
     """
-
     sql = stmt.strip().rstrip(";")
 
-    # Pattern to capture:
-    #   SELECT <select>
-    #   FROM <from>
-    #   [WHERE <where>]
-    #   [GROUP BY <groupby>]
-    #   [ORDER BY <orderby>]
-    #   [LIMIT <limit>]
-    pattern = r"""
-        SELECT\s+(?P<select>.+?)\s+
-        FROM\s+(?P<from>.+?)
-        (?:\s+WHERE\s+(?P<where>.+?))?
-        (?:\s+GROUP\s+BY\s+(?P<groupby>.+?))?
-        (?:\s+ORDER\s+BY\s+(?P<orderby>.+?))?
-        (?:\s+LIMIT\s+(?P<limit>.+?))?
-        $
-    """
-
-    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    m = SELECT_RE.search(sql)
     if not m:
         return (
             "# Could not parse SELECT.\n"
             "# " + sql.replace("\n", "\n# ") +
-            "\n\nquery {\n  # TODO: define field & selection set\n}"
+            "\n\nquery {\n  # TODO: define field & selection set\n}\n"
         )
 
     select_raw = m.group("select").strip()
@@ -355,31 +410,22 @@ def _mysql_select_to_graphql(stmt: str) -> str:
     order_raw  = m.group("orderby").strip()  if m.group("orderby")  else None
     limit_raw  = m.group("limit").strip()    if m.group("limit")    else None
 
-    # ----------------------------------------------------------------
-    # 1) Determine base table + alias from FROM clause
-    # ----------------------------------------------------------------
-    # The first table reference in FROM will be used as the GraphQL root.
-    # We permit:  users u
-    #             `users` AS u
-    #             app.users u
+    # 1) Determine base table + alias
     base_table_match = re.match(
         r"""
-        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)  # table or schema.table
-        (?:\s+(?:AS\s+)?(?P<alias>\w+))?      # optional alias
+        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)   # table or schema.table
+        (?:\s+(?:AS\s+)?(?P<alias>\w+))?       # optional alias
         """,
         from_raw,
         flags=re.IGNORECASE | re.VERBOSE
     )
-
     if base_table_match:
         full_table_name = base_table_match.group("table")
         base_alias = base_table_match.group("alias")
     else:
-        # fallback: treat whole from_raw as table
         full_table_name = from_raw.split()[0]
         base_alias = None
 
-    # schema.table → take last part
     if "." in full_table_name:
         base_table_raw = full_table_name.split(".")[-1]
     else:
@@ -388,24 +434,23 @@ def _mysql_select_to_graphql(stmt: str) -> str:
     base_table_raw = base_table_raw.strip("`\"")
     root_field_name = _dxl_to_camel(base_table_raw)
 
-    # ----------------------------------------------------------------
-    # 2) Extract JOIN info for comments
-    # ----------------------------------------------------------------
-    join_comments = []
-
-    join_pattern = r"""
+    # 2) JOIN info for comments
+    join_comments: list[str] = []
+    join_pattern = re.compile(
+        r"""
         \bJOIN\s+
         (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)   # joined table
         (?:\s+(?:AS\s+)?(?P<alias>\w+))?       # optional alias
         \s+ON\s+(?P<on>.+?)(?=\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|$)
-    """
+        """,
+        flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
+    )
 
-    for jm in re.finditer(join_pattern, from_raw, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE):
+    for jm in join_pattern.finditer(from_raw):
         j_table = jm.group("table").strip("`\"")
         j_alias = jm.group("alias")
         j_on    = jm.group("on").strip()
 
-        # schema.table → last part
         if "." in j_table:
             j_table_simple = j_table.split(".")[-1]
         else:
@@ -415,53 +460,37 @@ def _mysql_select_to_graphql(stmt: str) -> str:
         j_type  = _dxl_to_pascal(_dxl_singular(j_table_simple))
 
         alias_part = f" alias {j_alias}" if j_alias else ""
-        join_comments.append(
-            f"    # JOIN: {j_table} {alias_part} ON {j_on}"
-        )
-        join_comments.append(
-            f"    #   → consider nested field `{j_field}: {j_type}`"
-        )
+        join_comments.append(f"    # JOIN: {j_table} {alias_part} ON {j_on}")
+        join_comments.append(f"    #   → consider nested field `{j_field}: {j_type}`")
 
-    # ----------------------------------------------------------------
-    # 3) Parse SELECT columns (respect aliases, prefixes, functions)
-    # ----------------------------------------------------------------
-    columns = []
+    # 3) Parse SELECT columns
+    columns: list[str] = []
     for col_expr in select_raw.split(","):
         expr = col_expr.strip()
         if not expr:
             continue
 
-        # 3.1 If there's AS alias, use that alias as the GraphQL field name.
         alias_match = re.search(r"\bAS\s+(\w+)$", expr, flags=re.IGNORECASE)
         if alias_match:
-            field_name = alias_match.group(1)
-            columns.append(field_name)
+            columns.append(alias_match.group(1))
             continue
 
-        # 3.2 Strip function wrappers like COUNT(...), SUM(...), etc.
-        # We'll do a cheap heuristic: if it looks like func(...), try to use alias
-        # or fallback to funcName.
         func_match = re.match(r"(?P<func>\w+)\s*\((?P<body>.*)\)", expr)
         if func_match:
             func_name = func_match.group("func")
-            # If the function body has an alias-like token at the end, you could
-            # extend this further. For now, we just use the function name.
             columns.append(func_name)
             continue
 
-        # 3.3 Strip table prefix: u.id → id
         if "." in expr:
             last = expr.split(".")[-1]
         else:
             last = expr
 
-        # remove any stray backticks and trailing stuff
         last = last.strip("`\" ").split()[0]
         columns.append(last)
 
-    # De-duplicate while preserving order
-    seen = set()
-    unique_columns = []
+    seen: set[str] = set()
+    unique_columns: list[str] = []
     for c in columns:
         if c not in seen:
             unique_columns.append(c)
@@ -469,12 +498,9 @@ def _mysql_select_to_graphql(stmt: str) -> str:
 
     selection_lines = [f"    {_dxl_to_camel(col)}" for col in unique_columns]
 
-    # ----------------------------------------------------------------
-    # 4) Build WHERE / GROUP BY / ORDER BY / LIMIT comments
-    # ----------------------------------------------------------------
+    # 4) comments for WHERE / GROUP BY / ORDER BY / LIMIT
     where_comment = ""
     if where_raw:
-        # If we have a base alias (e.g. "u"), strip "u." from WHERE for nicer comment
         if base_alias:
             simplified_where = where_raw.replace(f"{base_alias}.", "")
         else:
@@ -489,9 +515,6 @@ def _mysql_select_to_graphql(stmt: str) -> str:
     if join_comments:
         join_block = "\n".join(join_comments) + "\n"
 
-    # ----------------------------------------------------------------
-    # 5) Compose final GraphQL
-    # ----------------------------------------------------------------
     header_comment = "# From SELECT:\n# " + sql.replace("\n", "\n# ")
 
     body = (
@@ -509,16 +532,11 @@ def _mysql_select_to_graphql(stmt: str) -> str:
 
     return header_comment + "\n\n" + body
 
-#DXL-2 | David Morales | ends
-
+#DXL-3 | David Morales | ends | optimize _mysql_select_to_graphql
+#DXL-3 | David Morales | starts | optimize mysql insert, update and delete
 def _mysql_insert_to_graphql(stmt: str) -> str:
     sql = stmt.strip()
-    pattern = r"""
-        INSERT\s+INTO\s+`?(?P<table>\w+)`?
-        \s*(?:\((?P<cols>[^)]+)\))?
-        \s*VALUES\s*(?P<values>.+)
-    """
-    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    m = INSERT_RE.search(sql)
     if not m:
         return "# Could not parse INSERT.\n# " + sql.replace("\n", "\n# ")
 
@@ -529,7 +547,7 @@ def _mysql_insert_to_graphql(stmt: str) -> str:
     cols = [c.strip("` ") for c in cols_raw.split(",")] if cols_raw else []
 
     groups = re.findall(r"\(([^)]+)\)", values_raw)
-    objects = []
+    objects: list[str] = []
 
     for g in groups:
         vals = [v.strip() for v in g.split(",")]
@@ -553,19 +571,13 @@ def _mysql_insert_to_graphql(stmt: str) -> str:
         "  ) {\n"
         "    # TODO: select fields to return\n"
         "  }\n"
-        "}"
+        "}\n"
     )
 
 
 def _mysql_update_to_graphql(stmt: str) -> str:
     sql = stmt.strip()
-    pattern = r"""
-        UPDATE\s+`?(?P<table>\w+)`?
-        \s+SET\s+(?P<set>.+?)
-        (?:\s+WHERE\s+(?P<where>.+))?
-        $
-    """
-    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    m = UPDATE_RE.search(sql)
     if not m:
         return "# Could not parse UPDATE.\n# " + sql.replace("\n", "\n# ")
 
@@ -573,7 +585,7 @@ def _mysql_update_to_graphql(stmt: str) -> str:
     set_raw = m.group("set")
     where_raw = m.group("where")
 
-    assignments = []
+    assignments: list[tuple[str, str]] = []
     for part in set_raw.split(","):
         p = part.strip()
         if "=" in p:
@@ -599,18 +611,13 @@ def _mysql_update_to_graphql(stmt: str) -> str:
         "  ) {\n"
         "    # TODO: select fields to return\n"
         "  }\n"
-        "}"
+        "}\n"
     )
 
 
 def _mysql_delete_to_graphql(stmt: str) -> str:
     sql = stmt.strip()
-    pattern = r"""
-        DELETE\s+FROM\s+`?(?P<table>\w+)`?
-        (?:\s+WHERE\s+(?P<where>.+))?
-        $
-    """
-    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    m = DELETE_RE.search(sql)
     if not m:
         return "# Could not parse DELETE.\n# " + sql.replace("\n", "\n# ")
 
@@ -629,28 +636,10 @@ def _mysql_delete_to_graphql(stmt: str) -> str:
         "  ) {\n"
         "    # TODO: select fields to return\n"
         "  }\n"
-        "}"
+        "}\n"
     )
 
-
-def _mysql_sql_type_to_graphql(sql_type: str) -> str:
-    t = sql_type.upper()
-    if t.startswith(("INT", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT")):
-        return "Int"
-    if t.startswith(("DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL")):
-        return "Float"
-    if "CHAR" in t or "TEXT" in t or "CLOB" in t:
-        return "String"
-    if "BLOB" in t or "BINARY" in t or "VARBINARY" in t:
-        return "String"
-    if "BOOL" in t:
-        return "Boolean"
-    if "DATE" in t or "TIME" in t or "TIMESTAMP" in t or "YEAR" in t:
-        return "String"
-    return "String"
-
-
-
+#DXL-3 | David Morales | ends | optimize mysql insert, update and delete
 #DXL-1 | David Morales | ends
 # --- API ENDPOINTS ---
 
