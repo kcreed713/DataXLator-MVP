@@ -649,12 +649,7 @@ def bulk_convert():
                                 except Exception as sql_e:
                                     print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
                                     pass
-                            # #DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
-                            elif lower_filename.endswith('.sql'):
-                                converted_content = mysql_to_graphql(content)
-                                new_filename = filename.replace('.sql', '.graphql')
-                                convert_type = 'MYSQL_TO_GRAPHQL'
-                            # #DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
+
 
                             
                     except Exception as e:

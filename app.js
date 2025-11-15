@@ -1,3 +1,20 @@
+/* ╔════════════════════════════════════════════════════════════════════════════╗
+   ✨ FILE LOG: app.js
+   ──────────────────────────────────────────────────────────────────────────────
+   Company: DataXLator
+   Author: David Morales
+   Date: 2025-11-05
+
+   📜 CHANGE LOG
+   ──────────────────────────────────────────────────────────────────────────────
+   [DXL-1] (2025-11-05)
+   • Added Oracle SQL → GraphQL support to Free converter.
+   • Integrated backend /convert-single route.
+   • Removed Pro-only converter UI and unified logic under Free tab.
+
+   [DXL-1] (Future example)
+   • Add syntax highlighting for GraphQL output in Free converter.
+   ╚════════════════════════════════════════════════════════════════════════════╝ */
 // --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
