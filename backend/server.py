@@ -1,8 +1,12 @@
 # ╔═ ✨ ROUTE: /convert-pro (Fallback / Mirror) ═══════════════════════════════════╗
-# Story: DXL-1 — Temporarily mirror Free route for Oracle SQL → GraphQL.
+# Story: DXL-1 — Temporarily mirror Free route for Mysql → GraphQL.
 # Author: David Morales
 # Company: DataXLator
 # Date: 2025-11-05
+# Story: DXL-2 — Temporarily mirror Free route for Mysql → GraphQL.
+# Author: David Morales
+# Company: DataXLator
+# Date: 2025-11-14
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 import io
 import json
@@ -297,64 +301,215 @@ def _mysql_create_table_to_graphql(stmt: str) -> str:
 
     return f"type {gql_type_name} {{\n" + "\n".join(fields) + "\n}"
 
-
+#DXL-2 | David Morales | starts
 def _mysql_select_to_graphql(stmt: str) -> str:
     """
-    Simple SELECT → GraphQL query.
-    Keeps WHERE as a comment if present.
+    Enhanced SELECT → GraphQL query.
+
+    Supports:
+      - Table aliases      (FROM users u)
+      - Column aliases     (u.id AS userId)
+      - Prefixed columns   (u.email)
+      - Multiple tables / JOINs (JOIN orders o ON o.user_id = u.id)
+      - GROUP BY
+      - ORDER BY
+      - LIMIT
+
+    Strategy:
+      - Pick the FIRST table in the FROM as the GraphQL root field.
+      - Flatten selected columns into a single selection set.
+      - Keep JOIN / GROUP BY / ORDER BY / LIMIT in comments for context.
     """
+
     sql = stmt.strip().rstrip(";")
+
+    # Pattern to capture:
+    #   SELECT <select>
+    #   FROM <from>
+    #   [WHERE <where>]
+    #   [GROUP BY <groupby>]
+    #   [ORDER BY <orderby>]
+    #   [LIMIT <limit>]
     pattern = r"""
         SELECT\s+(?P<select>.+?)\s+
-        FROM\s+(?P<table>[\w`]+)
-        (?:\s+WHERE\s+(?P<where>.+))?
+        FROM\s+(?P<from>.+?)
+        (?:\s+WHERE\s+(?P<where>.+?))?
+        (?:\s+GROUP\s+BY\s+(?P<groupby>.+?))?
+        (?:\s+ORDER\s+BY\s+(?P<orderby>.+?))?
+        (?:\s+LIMIT\s+(?P<limit>.+?))?
         $
     """
+
     m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
     if not m:
         return (
-            "# Could not parse SELECT.\n# " + sql.replace("\n", "\n# ") +
-            "\n\nquery {\n  # TODO: define field & selection set\n}\n"
+            "# Could not parse SELECT.\n"
+            "# " + sql.replace("\n", "\n# ") +
+            "\n\nquery {\n  # TODO: define field & selection set\n}"
         )
 
     select_raw = m.group("select").strip()
-    table_raw = m.group("table").strip("`")
-    where_raw = m.group("where").strip() if m.group("where") else None
+    from_raw   = m.group("from").strip()
+    where_raw  = m.group("where").strip()    if m.group("where")    else None
+    group_raw  = m.group("groupby").strip()  if m.group("groupby")  else None
+    order_raw  = m.group("orderby").strip()  if m.group("orderby")  else None
+    limit_raw  = m.group("limit").strip()    if m.group("limit")    else None
 
-    table_field = _dxl_to_camel(table_raw)
+    # ----------------------------------------------------------------
+    # 1) Determine base table + alias from FROM clause
+    # ----------------------------------------------------------------
+    # The first table reference in FROM will be used as the GraphQL root.
+    # We permit:  users u
+    #             `users` AS u
+    #             app.users u
+    base_table_match = re.match(
+        r"""
+        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)  # table or schema.table
+        (?:\s+(?:AS\s+)?(?P<alias>\w+))?      # optional alias
+        """,
+        from_raw,
+        flags=re.IGNORECASE | re.VERBOSE
+    )
 
-    fields = []
-    for part in select_raw.split(","):
-        p = part.strip()
-        if not p:
-            continue
-        alias_match = re.search(r"\bAS\b\s+(\w+)$", p, flags=re.IGNORECASE)
-        if alias_match:
-            fname = alias_match.group(1)
+    if base_table_match:
+        full_table_name = base_table_match.group("table")
+        base_alias = base_table_match.group("alias")
+    else:
+        # fallback: treat whole from_raw as table
+        full_table_name = from_raw.split()[0]
+        base_alias = None
+
+    # schema.table → take last part
+    if "." in full_table_name:
+        base_table_raw = full_table_name.split(".")[-1]
+    else:
+        base_table_raw = full_table_name
+
+    base_table_raw = base_table_raw.strip("`\"")
+    root_field_name = _dxl_to_camel(base_table_raw)
+
+    # ----------------------------------------------------------------
+    # 2) Extract JOIN info for comments
+    # ----------------------------------------------------------------
+    join_comments = []
+
+    join_pattern = r"""
+        \bJOIN\s+
+        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)   # joined table
+        (?:\s+(?:AS\s+)?(?P<alias>\w+))?       # optional alias
+        \s+ON\s+(?P<on>.+?)(?=\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|$)
+    """
+
+    for jm in re.finditer(join_pattern, from_raw, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE):
+        j_table = jm.group("table").strip("`\"")
+        j_alias = jm.group("alias")
+        j_on    = jm.group("on").strip()
+
+        # schema.table → last part
+        if "." in j_table:
+            j_table_simple = j_table.split(".")[-1]
         else:
-            last = p.split()[-1]
-            if "." in last:
-                last = last.split(".")[-1]
-            fname = last.strip("`\"")
-        fields.append(f"    {_dxl_to_camel(fname)}")
+            j_table_simple = j_table
 
-    if not fields:
-        fields.append("    # TODO: add fields")
+        j_field = _dxl_to_camel(_dxl_singular(j_table_simple))
+        j_type  = _dxl_to_pascal(_dxl_singular(j_table_simple))
 
-    where_comment = f"    # WHERE: {where_raw}\n" if where_raw else ""
-    selection_block = "\n".join(fields)
+        alias_part = f" alias {j_alias}" if j_alias else ""
+        join_comments.append(
+            f"    # JOIN: {j_table} {alias_part} ON {j_on}"
+        )
+        join_comments.append(
+            f"    #   → consider nested field `{j_field}: {j_type}`"
+        )
 
-    return (
-        "# From SELECT:\n"
-        "# " + sql.replace("\n", "\n# ") + "\n\n"
+    # ----------------------------------------------------------------
+    # 3) Parse SELECT columns (respect aliases, prefixes, functions)
+    # ----------------------------------------------------------------
+    columns = []
+    for col_expr in select_raw.split(","):
+        expr = col_expr.strip()
+        if not expr:
+            continue
+
+        # 3.1 If there's AS alias, use that alias as the GraphQL field name.
+        alias_match = re.search(r"\bAS\s+(\w+)$", expr, flags=re.IGNORECASE)
+        if alias_match:
+            field_name = alias_match.group(1)
+            columns.append(field_name)
+            continue
+
+        # 3.2 Strip function wrappers like COUNT(...), SUM(...), etc.
+        # We'll do a cheap heuristic: if it looks like func(...), try to use alias
+        # or fallback to funcName.
+        func_match = re.match(r"(?P<func>\w+)\s*\((?P<body>.*)\)", expr)
+        if func_match:
+            func_name = func_match.group("func")
+            # If the function body has an alias-like token at the end, you could
+            # extend this further. For now, we just use the function name.
+            columns.append(func_name)
+            continue
+
+        # 3.3 Strip table prefix: u.id → id
+        if "." in expr:
+            last = expr.split(".")[-1]
+        else:
+            last = expr
+
+        # remove any stray backticks and trailing stuff
+        last = last.strip("`\" ").split()[0]
+        columns.append(last)
+
+    # De-duplicate while preserving order
+    seen = set()
+    unique_columns = []
+    for c in columns:
+        if c not in seen:
+            unique_columns.append(c)
+            seen.add(c)
+
+    selection_lines = [f"    {_dxl_to_camel(col)}" for col in unique_columns]
+
+    # ----------------------------------------------------------------
+    # 4) Build WHERE / GROUP BY / ORDER BY / LIMIT comments
+    # ----------------------------------------------------------------
+    where_comment = ""
+    if where_raw:
+        # If we have a base alias (e.g. "u"), strip "u." from WHERE for nicer comment
+        if base_alias:
+            simplified_where = where_raw.replace(f"{base_alias}.", "")
+        else:
+            simplified_where = where_raw
+        where_comment = f"    # WHERE: {simplified_where.strip()}\n"
+
+    group_comment = f"    # GROUP BY: {group_raw}\n" if group_raw else ""
+    order_comment = f"    # ORDER BY: {order_raw}\n" if order_raw else ""
+    limit_comment = f"    # LIMIT: {limit_raw}\n"     if limit_raw else ""
+
+    join_block = ""
+    if join_comments:
+        join_block = "\n".join(join_comments) + "\n"
+
+    # ----------------------------------------------------------------
+    # 5) Compose final GraphQL
+    # ----------------------------------------------------------------
+    header_comment = "# From SELECT:\n# " + sql.replace("\n", "\n# ")
+
+    body = (
         "query {\n"
-        f"  {table_field} {{\n"
+        f"  {root_field_name} {{\n"
         f"{where_comment}"
-        f"{selection_block}\n"
+        f"{group_comment}"
+        f"{order_comment}"
+        f"{limit_comment}"
+        f"{join_block}"
+        + "\n".join(selection_lines) + "\n"
         "  }\n"
         "}"
     )
 
+    return header_comment + "\n\n" + body
+
+#DXL-2 | David Morales | ends
 
 def _mysql_insert_to_graphql(stmt: str) -> str:
     sql = stmt.strip()
