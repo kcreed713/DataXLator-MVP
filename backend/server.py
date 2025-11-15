@@ -12,8 +12,9 @@ import csv
 import os
 import base64 # Required for decoding Base64 credentials
 from collections import OrderedDict
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
+import re
 
 # --- FIREBASE FIRESTORE SETUP ---
 # Requires: pip install firebase-admin
@@ -52,6 +53,14 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Load the webhook secret securely from environment variables
 WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'NO_SECRET_SET')
 print(f"Webhook Secret Status: {'Set' if WEBHOOK_SECRET != 'NO_SECRET_SET' else 'MISSING'}")
+
+#DXL-1 | David Morales | starts
+
+@app.route('/')
+def home():
+    return send_from_directory('.', 'index.html')
+
+#DXL-1 | David Morales | ends
 
 
 # --- FIRESTORE HELPER FUNCTIONS ---
@@ -154,6 +163,340 @@ def csv_to_json(data_str):
     json_data = list(reader)
     return json.dumps(json_data, indent=2)
 
+#DXL-1 | David Morales | starts
+def mysql_to_graphql(sql_str: str) -> str:
+    """
+    Best-effort MySQL → GraphQL converter.
+    Supports:
+      - CREATE TABLE ... → GraphQL type
+      - Simple SELECT ... FROM ... [WHERE ...] → query
+      - INSERT / UPDATE / DELETE → mutation stubs
+
+    It NEVER raises on bad SQL; instead it returns commented stubs.
+    """
+    raw = (sql_str or "").strip()
+    if not raw:
+        return "# Empty SQL input\n"
+
+    # Allow multiple statements separated by ';'
+    statements = [s.strip() for s in raw.split(';') if s.strip()]
+    parts = []
+
+    for stmt in statements:
+        up = stmt.lstrip().upper()
+
+        if up.startswith("CREATE TABLE"):
+            parts.append(_mysql_create_table_to_graphql(stmt))
+        elif up.startswith("SELECT"):
+            parts.append(_mysql_select_to_graphql(stmt))
+        elif up.startswith("INSERT"):
+            parts.append(_mysql_insert_to_graphql(stmt))
+        elif up.startswith("UPDATE"):
+            parts.append(_mysql_update_to_graphql(stmt))
+        elif up.startswith("DELETE"):
+            parts.append(_mysql_delete_to_graphql(stmt))
+        else:
+            parts.append(
+                "# Unsupported SQL statement; adjust manually.\n"
+                "# " + stmt.replace("\n", "\n# ")
+            )
+
+    return "\n\n".join(parts)
+
+
+def _dxl_to_pascal(name: str) -> str:
+    parts = re.split(r"[_\s]+", name)
+    return "".join(p.capitalize() for p in parts if p)
+
+
+def _dxl_to_camel(name: str) -> str:
+    parts = re.split(r"[_\s]+", name)
+    if not parts:
+        return name
+    return parts[0].lower() + "".join(p.capitalize() for p in parts[1:])
+
+
+def _dxl_singular(name: str) -> str:
+    if name.endswith("ies"):
+        return name[:-3] + "y"
+    if name.endswith("ses"):
+        return name[:-2]
+    if name.endswith("s") and not name.endswith("ss"):
+        return name[:-1]
+    return name
+
+
+def _mysql_create_table_to_graphql(stmt: str) -> str:
+    """
+    CREATE TABLE → GraphQL type
+    Handles:
+      CREATE TABLE [IF NOT EXISTS] `schema`.`table` ( ... ) ENGINE=...
+    """
+    sql = stmt.strip()
+    pattern = r"""
+        CREATE\s+TABLE
+        (?:\s+IF\s+NOT\s+EXISTS)?
+        \s+(?P<name>`?[\w]+`?(?:\.`?[\w]+`?)?)
+        \s*\(
+            (?P<body>.*?)
+        \)
+        (?:\s+ENGINE\b.*)?
+        \s*$
+    """
+    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    if not m:
+        return "# Could not parse CREATE TABLE.\n# " + sql.replace("\n", "\n# ")
+
+    full_name = m.group("name")
+    body = m.group("body")
+
+    # schema.table → take last part
+    if "." in full_name:
+        table_name_raw = full_name.split(".")[-1]
+    else:
+        table_name_raw = full_name
+
+    table_name_raw = table_name_raw.strip("`\"")
+    singular = _dxl_singular(table_name_raw)
+    gql_type_name = _dxl_to_pascal(singular)
+
+    lines = [ln.strip().rstrip(",") for ln in body.splitlines() if ln.strip()]
+    fields = []
+
+    for line in lines:
+        upper = line.upper()
+        if upper.startswith((
+            "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "KEY",
+            "CONSTRAINT", "INDEX", "FULLTEXT", "SPATIAL"
+        )):
+            continue
+
+        tokens = line.split()
+        if not tokens:
+            continue
+
+        col_token = tokens[0]
+        col_name_raw = col_token.strip("`\"")
+        sql_type = tokens[1] if len(tokens) > 1 else "TEXT"
+        rest = " ".join(tokens[2:]).upper()
+
+        gql_type = _mysql_sql_type_to_graphql(sql_type)
+
+        # id / <table>_id → ID
+        if col_name_raw.lower() in ("id", f"{singular.lower()}_id"):
+            gql_type = "ID"
+
+        if "NOT NULL" in rest or "PRIMARY KEY" in rest:
+            gql_type += "!"
+
+        field_name = _dxl_to_camel(col_name_raw)
+        fields.append(f"  {field_name}: {gql_type}")
+
+    if not fields:
+        fields.append("  # TODO: no columns parsed")
+
+    return f"type {gql_type_name} {{\n" + "\n".join(fields) + "\n}"
+
+
+def _mysql_select_to_graphql(stmt: str) -> str:
+    """
+    Simple SELECT → GraphQL query.
+    Keeps WHERE as a comment if present.
+    """
+    sql = stmt.strip().rstrip(";")
+    pattern = r"""
+        SELECT\s+(?P<select>.+?)\s+
+        FROM\s+(?P<table>[\w`]+)
+        (?:\s+WHERE\s+(?P<where>.+))?
+        $
+    """
+    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    if not m:
+        return (
+            "# Could not parse SELECT.\n# " + sql.replace("\n", "\n# ") +
+            "\n\nquery {\n  # TODO: define field & selection set\n}\n"
+        )
+
+    select_raw = m.group("select").strip()
+    table_raw = m.group("table").strip("`")
+    where_raw = m.group("where").strip() if m.group("where") else None
+
+    table_field = _dxl_to_camel(table_raw)
+
+    fields = []
+    for part in select_raw.split(","):
+        p = part.strip()
+        if not p:
+            continue
+        alias_match = re.search(r"\bAS\b\s+(\w+)$", p, flags=re.IGNORECASE)
+        if alias_match:
+            fname = alias_match.group(1)
+        else:
+            last = p.split()[-1]
+            if "." in last:
+                last = last.split(".")[-1]
+            fname = last.strip("`\"")
+        fields.append(f"    {_dxl_to_camel(fname)}")
+
+    if not fields:
+        fields.append("    # TODO: add fields")
+
+    where_comment = f"    # WHERE: {where_raw}\n" if where_raw else ""
+    selection_block = "\n".join(fields)
+
+    return (
+        "# From SELECT:\n"
+        "# " + sql.replace("\n", "\n# ") + "\n\n"
+        "query {\n"
+        f"  {table_field} {{\n"
+        f"{where_comment}"
+        f"{selection_block}\n"
+        "  }\n"
+        "}"
+    )
+
+
+def _mysql_insert_to_graphql(stmt: str) -> str:
+    sql = stmt.strip()
+    pattern = r"""
+        INSERT\s+INTO\s+`?(?P<table>\w+)`?
+        \s*(?:\((?P<cols>[^)]+)\))?
+        \s*VALUES\s*(?P<values>.+)
+    """
+    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    if not m:
+        return "# Could not parse INSERT.\n# " + sql.replace("\n", "\n# ")
+
+    table = m.group("table")
+    cols_raw = m.group("cols")
+    values_raw = m.group("values")
+
+    cols = [c.strip("` ") for c in cols_raw.split(",")] if cols_raw else []
+
+    groups = re.findall(r"\(([^)]+)\)", values_raw)
+    objects = []
+
+    for g in groups:
+        vals = [v.strip() for v in g.split(",")]
+        if cols:
+            pairs = list(zip(cols, vals))
+        else:
+            pairs = [(f"col{i+1}", v) for i, v in enumerate(vals)]
+        lines = [f"      {_dxl_to_camel(c)}: {v}" for c, v in pairs]
+        objects.append("    {\n" + "\n".join(lines) + "\n    }")
+
+    objects_block = ",\n".join(objects) if objects else "    # TODO: add objects"
+
+    return (
+        "# From INSERT:\n"
+        "# " + sql.replace("\n", "\n# ") + "\n\n"
+        "mutation {\n"
+        f"  insert_{_dxl_to_camel(table)}(\n"
+        "    objects: [\n"
+        f"{objects_block}\n"
+        "    ]\n"
+        "  ) {\n"
+        "    # TODO: select fields to return\n"
+        "  }\n"
+        "}"
+    )
+
+
+def _mysql_update_to_graphql(stmt: str) -> str:
+    sql = stmt.strip()
+    pattern = r"""
+        UPDATE\s+`?(?P<table>\w+)`?
+        \s+SET\s+(?P<set>.+?)
+        (?:\s+WHERE\s+(?P<where>.+))?
+        $
+    """
+    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    if not m:
+        return "# Could not parse UPDATE.\n# " + sql.replace("\n", "\n# ")
+
+    table = m.group("table")
+    set_raw = m.group("set")
+    where_raw = m.group("where")
+
+    assignments = []
+    for part in set_raw.split(","):
+        p = part.strip()
+        if "=" in p:
+            col, val = p.split("=", 1)
+            assignments.append((_dxl_to_camel(col.strip("` ")), val.strip()))
+        else:
+            assignments.append((_dxl_to_camel(p), "/* TODO: value */"))
+
+    set_lines = [f"      {c}: {v}" for c, v in assignments] or ["      # TODO: _set fields"]
+    where_comment = f"      # WHERE: {where_raw}\n" if where_raw else "      # WHERE: TODO\n"
+
+    return (
+        "# From UPDATE:\n"
+        "# " + sql.replace("\n", "\n# ") + "\n\n"
+        "mutation {\n"
+        f"  update_{_dxl_to_camel(table)}(\n"
+        "    where: {\n"
+        f"{where_comment}"
+        "    },\n"
+        "    _set: {\n"
+        f"{'\n'.join(set_lines)}\n"
+        "    }\n"
+        "  ) {\n"
+        "    # TODO: select fields to return\n"
+        "  }\n"
+        "}"
+    )
+
+
+def _mysql_delete_to_graphql(stmt: str) -> str:
+    sql = stmt.strip()
+    pattern = r"""
+        DELETE\s+FROM\s+`?(?P<table>\w+)`?
+        (?:\s+WHERE\s+(?P<where>.+))?
+        $
+    """
+    m = re.search(pattern, sql, flags=re.IGNORECASE | re.DOTALL | re.VERBOSE)
+    if not m:
+        return "# Could not parse DELETE.\n# " + sql.replace("\n", "\n# ")
+
+    table = m.group("table")
+    where_raw = m.group("where")
+    where_comment = f"      # WHERE: {where_raw}\n" if where_raw else "      # WHERE: TODO\n"
+
+    return (
+        "# From DELETE:\n"
+        "# " + sql.replace("\n", "\n# ") + "\n\n"
+        "mutation {\n"
+        f"  delete_{_dxl_to_camel(table)}(\n"
+        "    where: {\n"
+        f"{where_comment}"
+        "    }\n"
+        "  ) {\n"
+        "    # TODO: select fields to return\n"
+        "  }\n"
+        "}"
+    )
+
+
+def _mysql_sql_type_to_graphql(sql_type: str) -> str:
+    t = sql_type.upper()
+    if t.startswith(("INT", "BIGINT", "SMALLINT", "TINYINT", "MEDIUMINT")):
+        return "Int"
+    if t.startswith(("DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL")):
+        return "Float"
+    if "CHAR" in t or "TEXT" in t or "CLOB" in t:
+        return "String"
+    if "BLOB" in t or "BINARY" in t or "VARBINARY" in t:
+        return "String"
+    if "BOOL" in t:
+        return "Boolean"
+    if "DATE" in t or "TIME" in t or "TIMESTAMP" in t or "YEAR" in t:
+        return "String"
+    return "String"
+
+
+
+#DXL-1 | David Morales | ends
 # --- API ENDPOINTS ---
 
 @app.route('/user/<user_id>', methods=['GET'])
@@ -195,6 +538,38 @@ def handle_payment_success():
         print(f"Error processing webhook: {e}")
         return jsonify({"error": "Internal server error during webhook processing"}), 500
 
+# #DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+@app.route('/convert', methods=['POST'])
+def convert_single():
+    """
+    Single-shot conversion API used by the Free converter tab.
+    Extend this as you add more format pairs.
+    """
+    payload = request.get_json(silent=True) or {}
+    input_format = (payload.get('inputFormat') or '').lower()
+    output_format = (payload.get('outputFormat') or '').lower()
+    text = payload.get('text') or ''
+
+    try:
+        if input_format == 'sql' and output_format == 'graphql':
+            result = mysql_to_graphql(text)
+        elif input_format == 'json' and output_format == 'yaml':
+            result = json_to_yaml(text)
+        elif input_format == 'yaml' and output_format == 'json':
+            result = yaml_to_json(text)
+        elif input_format == 'csv' and output_format == 'json':
+            result = csv_to_json(text)
+        else:
+            return jsonify({
+                "error": f"Unsupported conversion: {input_format} → {output_format}"
+            }), 400
+
+        return jsonify({"result": result}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+# #DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
 
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
@@ -274,6 +649,8 @@ def bulk_convert():
                                 except Exception as sql_e:
                                     print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
                                     pass
+
+
                             
                     except Exception as e:
                         error_message = f"ERROR converting {filename} (Type: {convert_type or 'Unknown'}): {str(e)}"

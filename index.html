@@ -1,3 +1,20 @@
+<!-- ╔════════════════════════════════════════════════════════════════════════════╗
+     ✨ FILE LOG: index.html
+     ──────────────────────────────────────────────────────────────────────────────
+     Company: DataXLator
+     Author: David Morales
+     Date: 2025-11-05
+
+     📜 CHANGE LOG
+     ──────────────────────────────────────────────────────────────────────────────
+     [DXL-1] (2025-11-05)
+     • Added Oracle SQL → GraphQL option in Free converter dropdown.
+     • Removed Pro-only converter block and unified UI.
+     • Verified frontend calls /convert-single route successfully.
+
+     [DXL-215] (Future Example)
+     • Add “Copy to Clipboard” button for GraphQL output.
+     ╚════════════════════════════════════════════════════════════════════════════╝ -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -404,6 +421,25 @@
             background-color: #e5c100;
             /* Slightly darker gold on hover */
         }
+        /* DXL-1 | David Morales | starts */
+        .env-banner {
+            margin-top: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            display: none; /* JS will show in dev */
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border: 1px solid #555;
+            background-color: #262626;
+            color: #f0c674;
+        }
+
+        .env-banner.dev {
+            border-color: #d9a441;
+        }
+        /* DXL-1 | David Morales | ends */
     </style>
 </head>
 
@@ -415,7 +451,9 @@
 
     <h1>DataXLator<span class="trademark">™</span></h1>
     <p class="subtitle">The universal single-file and bulk data converter.</p>
-
+    <!-- DXL-1 | David Morales | starts -->
+    <div id="env-banner" class="env-banner"></div>
+    <!-- DXL-1 | David Morales | ends -->
     <a href="contact.html" style="
 		position: absolute;
 		top: 20px;
@@ -463,6 +501,7 @@
                             <option value="json">JSON</option>
                             <option value="yaml">YAML</option>
                             <option value="csv">CSV (PRO)</option>
+                             <option value="sql">MySQL (PRO)</option>   <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
                         </select>
                     </div>
 
@@ -471,7 +510,7 @@
                         <select id="output-format">
                             <option value="yaml">YAML</option>
                             <option value="json">JSON</option>
-                            <option value="sql">SQL INSERT (PRO)</option>
+                            <option value="graphql">GraphQL (PRO)</option>  <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
                         </select>
                     </div>
 

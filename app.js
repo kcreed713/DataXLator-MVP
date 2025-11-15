@@ -1,3 +1,20 @@
+/* ╔════════════════════════════════════════════════════════════════════════════╗
+   ✨ FILE LOG: app.js
+   ──────────────────────────────────────────────────────────────────────────────
+   Company: DataXLator
+   Author: David Morales
+   Date: 2025-11-05
+
+   📜 CHANGE LOG
+   ──────────────────────────────────────────────────────────────────────────────
+   [DXL-1] (2025-11-05)
+   • Added Oracle SQL → GraphQL support to Free converter.
+   • Integrated backend /convert-single route.
+   • Removed Pro-only converter UI and unified logic under Free tab.
+
+   [DXL-1] (Future example)
+   • Add syntax highlighting for GraphQL output in Free converter.
+   ╚════════════════════════════════════════════════════════════════════════════╝ */
 // --- FIREBASE IMPORTS (REQUIRED FOR AUTH & STATUS) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -6,7 +23,43 @@ import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel, doc, on
 
 // --- Configuration ---
 // IMPORTANT: This URL is the Render deployment.
-const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+//DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+//const BULK_API_URL = 'https://dataxlator-api.onrender.com/bulk-convert';
+//DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
+
+//DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+// Detect if we're running locally
+const isLocal = (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+);
+
+// Base URL for the API
+const API_BASE = isLocal
+  ? 'http://127.0.0.1:5000'                 // local Flask
+  : 'https://dataxlator-api.onrender.com';  // production
+
+// Final endpoints
+const FREE_API_URL = `${API_BASE}/convert`;
+const BULK_API_URL = `${API_BASE}/bulk-convert`;
+
+// --- Environment banner (Dev vs Prod) ---
+window.addEventListener('DOMContentLoaded', () => {
+  const banner = document.getElementById('env-banner');
+  if (!banner) return;
+
+  if (isLocal) {
+    banner.textContent = `DEV MODE · API: ${API_BASE}`;
+    banner.classList.add('dev');
+    banner.style.display = 'inline-flex';
+  } else {
+    // In production we just hide it (or you could show "Production" if you want)
+    banner.style.display = 'none';
+  }
+});
+
+
+//DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
 
 // --- TRIAL DURATION ---
 const TRIAL_DURATION_DAYS = 7; 
@@ -421,7 +474,7 @@ function tryParseJSON(str) {
  * Executes the data conversion based on the selected formats.
  * This is triggered on input change, format change, or button click.
  */
-function translateData() {
+async function translateData() {
     outputData.value = ''; // Clear output initially
     inputData.classList.remove('error'); // Clear input error state
     outputData.classList.remove('error'); 
@@ -443,13 +496,58 @@ function translateData() {
     }
 
     // 3. Pro Feature Monetization Check (CSV/SQL)
-    if ((inputFormatValue === 'csv' || outputFormatValue === 'sql') && !isProUser()) {
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+    const requiresPro =
+    inputFormatValue === 'csv' ||
+    inputFormatValue === 'sql' ||       // NEW: MySQL input is PRO
+    outputFormatValue === 'sql' ||
+    outputFormatValue === 'graphql';    // NEW: GraphQL output is PRO
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
+    if (requiresPro && !isProUser()) {
         outputData.value = '🛑 PRO FEATURE REQUIRED 🛑\n\nThis conversion requires DataXLator Pro. Please check the "Pro Features" tab to start your 7-day free trial.';
         inputData.classList.add('error');
         trackEvent('PRO_Conversion_Attempt', { conversion: `${inputFormatValue}-to-${outputFormatValue}` });
         if (typeof openTab === 'function') openTab('pro');
         return; // BLOCK UNLESS PRO
     }
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+   // --- SPECIAL CASE: MySQL (SQL) → GraphQL via PYTHON BACKEND ---
+    if (inputFormatValue === 'sql' && outputFormatValue === 'graphql') {
+        try {
+            const res = await fetch(FREE_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inputFormat: 'sql',
+                    outputFormat: 'graphql',
+                    text: inputText
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || `HTTP ${res.status}`);
+            }
+
+            outputData.value = data.result;
+            trackEvent('Conversion_Success', {
+                conversion: 'sql-to-graphql',
+                path: 'backend'
+            });
+        } catch (e) {
+            outputData.value = `❌ MySQL → GraphQL Error (backend): ${e.message}`;
+            inputData.classList.add('error');
+            trackEvent('Conversion_Error', {
+                conversion: 'sql-to-graphql',
+                error: e.message,
+                path: 'backend'
+            });
+        }
+        return;
+    }
+
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
         
     let parsedObject = null;
 
@@ -703,18 +801,34 @@ function updateUIForProStatus(newIsPro) {
     // 2. Locate and enable/disable Pro-only options (CSV Input, SQL Output)
     const csvProOption = inputFormatSelect ? inputFormatSelect.querySelector('option[value="csv"]') : null;
     const sqlProOption = outputFormatSelect ? outputFormatSelect.querySelector('option[value="sql"]') : null;
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+    const sqlInputProOption = inputFormatSelect ? inputFormatSelect.querySelector('option[value="sql"]') : null;      // NEW
+    const graphqlProOption = outputFormatSelect ? outputFormatSelect.querySelector('option[value="graphql"]') : null; // NEW
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
 
     if (csvProOption) {
         // Hard-gate disabled. We rely on the check inside translateData to gate.
         csvProOption.disabled = false; 
         csvProOption.textContent = isPro ? 'CSV' : 'CSV (PRO)';
     }
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+    if (sqlInputProOption) {
+        sqlInputProOption.disabled = false;
+        sqlInputProOption.textContent = isPro ? 'MySQL' : 'MySQL (PRO)';        
+    }
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
 
     if (sqlProOption) {
          // Hard-gate disabled. We rely on the check inside translateData to gate.
         sqlProOption.disabled = false;
         sqlProOption.textContent = isPro ? 'SQL INSERT' : 'SQL INSERT (PRO)';
     }
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | starts
+    if (graphqlProOption) {
+        graphqlProOption.disabled = false;
+        graphqlProOption.textContent = isPro ? 'GraphQL' : 'GraphQL (PRO)';
+    }
+    //DXL-1 | David Morales | MySQL SQL → GraphQL Processing | ends
 
     // Safety: If a disabled option is currently selected, reset to JSON and re-run translate
     if (!isPro && outputFormatSelect && outputFormatSelect.value === 'sql') {
