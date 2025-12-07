@@ -11,6 +11,10 @@
 # Author: David Morales
 # Company: DataXLator
 # Date: 2025-11-15
+# Story: DXL-4 — Implement usage limits for Pro Individual plan.
+# Author: Gemini
+# Company: DataXLator
+# Date: 2025-12-07
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 import io
 import json
@@ -19,10 +23,15 @@ import yaml
 import csv
 import os
 import base64 # Required for decoding Base64 credentials
+import datetime # DXL-4: Required for usage tracking and reset dates
 from collections import OrderedDict
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import re
+
+# --- FIRESTORE LIMIT CONFIGURATION ---
+SQL_LIMIT_PRO_INDIVIDUAL = 5
+APP_ID = 'dataxlator' # Used in the Firestore path
 
 # --- FIREBASE FIRESTORE SETUP ---
 # Requires: pip install firebase-admin
@@ -135,14 +144,16 @@ def home():
 
 def get_pro_status_ref(user_id):
     """
-    Helper to get the correct Firestore document reference for the user's Pro status.
-    This path MUST match the listener path in the frontend app.js: 
+    Helper to get the correct Firestore document reference for the user's Pro status
+    and usage tracking.
+    This path MUST match the listener path in the frontend app.js:
     users/{userId}/subscriptions/dataxlator
     """
     if db is None:
         return None
         
-    return db.collection('users').document(user_id).collection('subscriptions').document('dataxlator')
+    # Using the existing subscription path for all user plan/usage data
+    return db.collection('users').document(user_id).collection('subscriptions').document(APP_ID)
 
 def get_user_status_db(user_id):
     """Fetches user status from Firestore. Returns (data, error)."""
@@ -156,27 +167,135 @@ def get_user_status_db(user_id):
         if doc.exists:
             # Returns user data if found
             return doc.to_dict(), None
-        # Returns empty dict if not found (defaults to non-Pro)
+        # Returns empty dict if not found (defaults to non-Pro/Free)
         return {}, None 
     except Exception as e:
         return None, f"Firestore read failed: {e}"
 
-def update_user_pro_status(user_id, is_pro_status):
-    """Updates user's isPro status in Firestore. Returns (success, error)."""
+def update_user_pro_status(user_id, is_pro_status, plan_tier='pro_individual'):
+    """
+    Updates user's subscription status and initializes usage tracking. 
+    Returns (success, error).
+    """
     
     user_ref = get_pro_status_ref(user_id)
     if user_ref is None:
         return False, "Database not initialized."
 
+    # DXL-4: Initialize usage tracking data upon successful payment/upgrade
+    initial_usage_data = {
+        'count': 0,
+        'reset_date': get_next_reset_date().isoformat()
+    }
+    
     try:
-        # CRITICAL FIX: The update now targets the /subscriptions/dataxlator document.
-        # This document needs to be created first (handled by app.js ensureUserDocumentExists)
-        # but merge=True ensures it updates or creates the document safely.
-        user_ref.set({'isPro': is_pro_status, 'updatedAt': firestore.SERVER_TIMESTAMP}, merge=True)
+        user_ref.set({
+            'isPro': is_pro_status, 
+            'plan_tier': plan_tier, # DXL-4: Set the specific plan tier
+            'sql_conversion_data': initial_usage_data, # DXL-4: Initialize tracking
+            'updatedAt': firestore.SERVER_TIMESTAMP
+        }, merge=True)
         return True, None
     except Exception as e:
         return False, f"Firestore update failed: {e}"
 
+# DXL-4: New Helper Functions for Usage Limits
+
+def get_next_reset_date():
+    """Calculates the 1st day of the next month for reset."""
+    today = datetime.date.today()
+    
+    if today.month == 12:
+        next_month = datetime.date(today.year + 1, 1, 1)
+    else:
+        next_month = datetime.date(today.year, today.month + 1, 1)
+    
+    return next_month
+
+def check_and_increment_sql_usage(user_id):
+    """
+    Enforces the SQL-to-GraphQL conversion limit using a Firestore Transaction.
+    
+    Args:
+        user_id (str): The ID of the user requesting the conversion.
+        
+    Returns:
+        tuple: (bool, str) - Success status and a message.
+    """
+    if db is None:
+        return False, "Database not initialized for usage check."
+
+    # Use the same subscription document for the usage check
+    user_ref = get_pro_status_ref(user_id)
+    
+    @firestore.transactional
+    def transaction_update(transaction, user_ref):
+        """The atomic operation run inside the transaction."""
+        
+        try:
+            # 1. READ: Get the user's document within the transaction
+            user_snapshot = user_ref.get(transaction=transaction)
+            
+            # Use sensible defaults if data is missing
+            user_data = user_snapshot.to_dict() or {}
+            
+            # Default to 'free' if tier is missing
+            plan_tier = user_data.get('plan_tier', 'free').lower() 
+            
+            sql_data = user_data.get('sql_conversion_data', {
+                'count': 0, 
+                'reset_date': get_next_reset_date().isoformat()
+            })
+            
+            current_count = sql_data.get('count', 0)
+            reset_date_str = sql_data.get('reset_date', get_next_reset_date().isoformat())
+            
+            # --- 2. CHECK PLAN & UNLIMITED ACCESS ---
+            if plan_tier == 'architect_pro':
+                # Architect Pro: Unlimited access, skip all checks
+                return True, "Success: Architect Pro (Unlimited) access granted."
+            
+            # --- 3. CHECK RESET DATE ---
+            today = datetime.date.today()
+            # Ensure we only compare dates, not time (split('T')[0])
+            reset_date = datetime.date.fromisoformat(reset_date_str.split('T')[0]) 
+            
+            if today >= reset_date:
+                # Time to reset the counter
+                current_count = 0
+                sql_data['reset_date'] = get_next_reset_date().isoformat()
+                print(f"Usage for {user_id} reset.")
+
+            # --- 4. CHECK LIMIT (Pro Individual) ---
+            if plan_tier == 'pro_individual':
+                if current_count < SQL_LIMIT_PRO_INDIVIDUAL:
+                    # Grant access and INCREMENT the counter
+                    sql_data['count'] = current_count + 1
+                    
+                    # Update the user document atomically
+                    transaction.update(user_ref, {
+                        'sql_conversion_data': sql_data,
+                        'updatedAt': firestore.SERVER_TIMESTAMP
+                    })
+                    return True, f"Success: Conversion {sql_data['count']} / {SQL_LIMIT_PRO_INDIVIDUAL} allowed."
+                else:
+                    # Deny access: Limit reached
+                    return False, f"Limit reached: Used {SQL_LIMIT_PRO_INDIVIDUAL} conversions this month. Upgrade to Architect Pro for unlimited use."
+            
+            # Default Deny for 'free' or unknown plans attempting a paid feature
+            return False, "Access denied. SQL-to-GraphQL conversion requires a paid subscription."
+            
+        except Exception as e:
+            print(f"Transaction failed for {user_id}: {e}")
+            # Raise exception to ensure transaction rollback
+            raise
+
+    # Execute the transaction
+    try:
+        return transaction_update(db.transaction(), user_ref)
+    except Exception as e:
+        # If the transaction failed (e.g., contention, server error)
+        return False, f"Server Error during usage check: {e}"
 
 # --- Conversion Helper Functions (Kept from original) ---
 
@@ -405,16 +524,16 @@ def _mysql_select_to_graphql(stmt: str) -> str:
 
     select_raw = m.group("select").strip()
     from_raw   = m.group("from").strip()
-    where_raw  = m.group("where").strip()    if m.group("where")    else None
-    group_raw  = m.group("groupby").strip()  if m.group("groupby")  else None
-    order_raw  = m.group("orderby").strip()  if m.group("orderby")  else None
-    limit_raw  = m.group("limit").strip()    if m.group("limit")    else None
+    where_raw  = m.group("where").strip()    if m.group("where")      else None
+    group_raw  = m.group("groupby").strip()  if m.group("groupby")    else None
+    order_raw  = m.group("orderby").strip()  if m.group("orderby")    else None
+    limit_raw  = m.group("limit").strip()    if m.group("limit")      else None
 
     # 1) Determine base table + alias
     base_table_match = re.match(
         r"""
-        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)   # table or schema.table
-        (?:\s+(?:AS\s+)?(?P<alias>\w+))?       # optional alias
+        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)    # table or schema.table
+        (?:\s+(?:AS\s+)?(?P<alias>\w+))?        # optional alias
         """,
         from_raw,
         flags=re.IGNORECASE | re.VERBOSE
@@ -439,8 +558,8 @@ def _mysql_select_to_graphql(stmt: str) -> str:
     join_pattern = re.compile(
         r"""
         \bJOIN\s+
-        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)   # joined table
-        (?:\s+(?:AS\s+)?(?P<alias>\w+))?       # optional alias
+        (?P<table>`?[\w]+`?(?:\.`?[\w]+`?)?)    # joined table
+        (?:\s+(?:AS\s+)?(?P<alias>\w+))?        # optional alias
         \s+ON\s+(?P<on>.+?)(?=\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|$)
         """,
         flags=re.IGNORECASE | re.DOTALL | re.VERBOSE,
@@ -496,7 +615,7 @@ def _mysql_select_to_graphql(stmt: str) -> str:
             unique_columns.append(c)
             seen.add(c)
 
-    selection_lines = [f"    {_dxl_to_camel(col)}" for col in unique_columns]
+    selection_lines = [f"      {_dxl_to_camel(col)}" for col in unique_columns]
 
     # 4) comments for WHERE / GROUP BY / ORDER BY / LIMIT
     where_comment = ""
@@ -505,11 +624,11 @@ def _mysql_select_to_graphql(stmt: str) -> str:
             simplified_where = where_raw.replace(f"{base_alias}.", "")
         else:
             simplified_where = where_raw
-        where_comment = f"    # WHERE: {simplified_where.strip()}\n"
+        where_comment = f"      # WHERE: {simplified_where.strip()}\n"
 
-    group_comment = f"    # GROUP BY: {group_raw}\n" if group_raw else ""
-    order_comment = f"    # ORDER BY: {order_raw}\n" if order_raw else ""
-    limit_comment = f"    # LIMIT: {limit_raw}\n"     if limit_raw else ""
+    group_comment = f"      # GROUP BY: {group_raw}\n" if group_raw else ""
+    order_comment = f"      # ORDER BY: {order_raw}\n" if order_raw else ""
+    limit_comment = f"      # LIMIT: {limit_raw}\n"      if limit_raw else ""
 
     join_block = ""
     if join_comments:
@@ -555,7 +674,7 @@ def _mysql_insert_to_graphql(stmt: str) -> str:
             pairs = list(zip(cols, vals))
         else:
             pairs = [(f"col{i+1}", v) for i, v in enumerate(vals)]
-        lines = [f"      {_dxl_to_camel(c)}: {v}" for c, v in pairs]
+        lines = [f"        {_dxl_to_camel(c)}: {v}" for c, v in pairs]
         objects.append("    {\n" + "\n".join(lines) + "\n    }")
 
     objects_block = ",\n".join(objects) if objects else "    # TODO: add objects"
@@ -594,8 +713,8 @@ def _mysql_update_to_graphql(stmt: str) -> str:
         else:
             assignments.append((_dxl_to_camel(p), "/* TODO: value */"))
 
-    set_lines = [f"      {c}: {v}" for c, v in assignments] or ["      # TODO: _set fields"]
-    where_comment = f"      # WHERE: {where_raw}\n" if where_raw else "      # WHERE: TODO\n"
+    set_lines = [f"        {c}: {v}" for c, v in assignments] or ["        # TODO: _set fields"]
+    where_comment = f"        # WHERE: {where_raw}\n" if where_raw else "        # WHERE: TODO\n"
 
     return (
         "# From UPDATE:\n"
@@ -623,7 +742,7 @@ def _mysql_delete_to_graphql(stmt: str) -> str:
 
     table = m.group("table")
     where_raw = m.group("where")
-    where_comment = f"      # WHERE: {where_raw}\n" if where_raw else "      # WHERE: TODO\n"
+    where_comment = f"        # WHERE: {where_raw}\n" if where_raw else "        # WHERE: TODO\n"
 
     return (
         "# From DELETE:\n"
@@ -646,14 +765,24 @@ def _mysql_delete_to_graphql(stmt: str) -> str:
 @app.route('/user/<user_id>', methods=['GET'])
 def get_user_status(user_id):
     """Endpoint for clients to check a user's Pro status."""
+    # NOTE: The client side needs to check plan_tier and sql_conversion_data
+    # to display the correct limits to the user.
     user_data, error = get_user_status_db(user_id)
     
     if user_data is not None and error is None:
-        is_pro = user_data.get("isPro", False) # Default to False if field is missing
-        return jsonify({"user_id": user_id, "isPro": is_pro}), 200
+        # Default to False and 'free' if fields are missing
+        is_pro = user_data.get("isPro", False) 
+        plan_tier = user_data.get("plan_tier", "free")
+        
+        return jsonify({
+            "user_id": user_id, 
+            "isPro": is_pro,
+            "plan_tier": plan_tier,
+            "usage": user_data.get("sql_conversion_data", {}) # Send back usage for client display
+        }), 200
     
     # Handle DB init error or read failure
-    status_code = 500 if "Database not initialized" in (error or "") else 404
+    status_code = 500 if "Database" in (error or "") else 404
     return jsonify({"user_id": user_id, "isPro": False, "error": error or "User not found"}), status_code
 
 @app.route('/webhook/payment-success', methods=['POST'])
@@ -666,15 +795,17 @@ def handle_payment_success():
     try:
         data = request.get_json()
         user_id = data.get('user_id') 
+        # DXL-4: Webhook should ideally pass the plan tier purchased
+        plan_tier = data.get('plan_tier', 'pro_individual') 
 
         if not user_id:
             return jsonify({"error": "Missing user_id in payload"}), 400
 
-        # Update the user's status in Firestore
-        success, db_error = update_user_pro_status(user_id, True)
+        # Update the user's status in Firestore, including the plan tier
+        success, db_error = update_user_pro_status(user_id, True, plan_tier)
 
         if success:
-            return jsonify({"status": "acknowledged", "user_id": user_id, "isPro": True}), 200
+            return jsonify({"status": "acknowledged", "user_id": user_id, "isPro": True, "plan_tier": plan_tier}), 200
         else:
             return jsonify({"error": f"Failed to update user status in DB: {db_error}"}), 500
 
@@ -687,16 +818,28 @@ def handle_payment_success():
 def convert_single():
     """
     Single-shot conversion API used by the Free converter tab.
-    Extend this as you add more format pairs.
+    DXL-4: Enforces usage limit only for SQL -> GraphQL conversion.
     """
     payload = request.get_json(silent=True) or {}
     input_format = (payload.get('inputFormat') or '').lower()
     output_format = (payload.get('outputFormat') or '').lower()
     text = payload.get('text') or ''
+    user_id = payload.get('user_id') # Crucial: Must be passed from frontend
 
     try:
         if input_format == 'sql' and output_format == 'graphql':
+            if not user_id:
+                return jsonify({"error": "User ID is required for conversion."}), 400
+            
+            # DXL-4: ENFORCEMENT GATE - Check and increment usage
+            allowed, message = check_and_increment_sql_usage(user_id)
+            
+            if not allowed:
+                return jsonify({"error": message}), 403 # 403 Forbidden
+                
+            # If allowed, proceed with conversion
             result = mysql_to_graphql(text)
+            
         elif input_format == 'json' and output_format == 'yaml':
             result = json_to_yaml(text)
         elif input_format == 'yaml' and output_format == 'json':
@@ -708,7 +851,7 @@ def convert_single():
                 "error": f"Unsupported conversion: {input_format} → {output_format}"
             }), 400
 
-        return jsonify({"result": result}), 200
+        return jsonify({"result": result, "message": message if allowed else None}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -718,10 +861,11 @@ def convert_single():
 @app.route('/bulk-convert', methods=['POST'])
 def bulk_convert():
     """The main monetized feature: handles bulk conversion after a Pro status check."""
+    # NOTE: Bulk convert remains gated by simple 'isPro' status, 
+    # as usage limits only apply to the single-shot /convert SQL->GraphQL feature.
     user_id = request.args.get('user_id') 
     
     # 1. CHECK PRO STATUS
-    # The DB check now automatically uses the correct path: users/{userId}/subscriptions/dataxlator
     user_data, error = get_user_status_db(user_id)
     is_pro = user_data.get('isPro', False) if user_data else False
 
@@ -769,6 +913,7 @@ def bulk_convert():
                                 new_filename = filename.replace('.json', '.yaml')
                                 convert_type = 'JSON_TO_YAML'
                                 try:
+                                    # Bulk conversion is not counted against SQL limits
                                     converted_content_sql = json_to_sql_insert(content)
                                     new_filename_sql = filename.replace('.json', '.sql')
                                 except Exception as sql_e:
@@ -788,12 +933,12 @@ def bulk_convert():
                                 new_filename = filename.replace('.csv', '.json')
                                 convert_type = 'CSV_TO_JSON'
                                 try:
+                                    # Bulk conversion is not counted against SQL limits
                                     converted_content_sql = json_to_sql_insert(json_content)
                                     new_filename_sql = filename.replace('.csv', '.sql')
                                 except Exception as sql_e:
                                     print(f"Skipped CSV to SQL conversion for {filename}: {str(sql_e)}")
                                     pass
-
 
                             
                     except Exception as e:
