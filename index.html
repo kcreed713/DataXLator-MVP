@@ -421,13 +421,15 @@
             background-color: #e5c100;
             /* Slightly darker gold on hover */
         }
+
         /* DXL-1 | David Morales | starts */
         .env-banner {
             margin-top: 8px;
             padding: 4px 10px;
             border-radius: 999px;
             font-size: 0.8rem;
-            display: none; /* JS will show in dev */
+            display: none;
+            /* JS will show in dev */
             align-items: center;
             justify-content: center;
             gap: 6px;
@@ -439,6 +441,7 @@
         .env-banner.dev {
             border-color: #d9a441;
         }
+
         /* DXL-1 | David Morales | ends */
     </style>
 </head>
@@ -454,6 +457,7 @@
     <!-- DXL-1 | David Morales | starts -->
     <div id="env-banner" class="env-banner"></div>
     <!-- DXL-1 | David Morales | ends -->
+
     <a href="contact.html" style="
 		position: absolute;
 		top: 20px;
@@ -470,11 +474,13 @@
 		transition: background-color 0.2s;
 	">Contact Us</a>
 
+    <!--
     <div id="teams-link-container">
         <a id="teams-link" href="teams.html" title="Upgrade to our B2B Teams plan">
             For Teams & Enterprise
         </a>
     </div>
+    -->
 
     <div class="tab-container">
         <button id="free-tab" class="tab-button active" onclick="openTab('free')">
@@ -501,7 +507,8 @@
                             <option value="json">JSON</option>
                             <option value="yaml">YAML</option>
                             <option value="csv">CSV (PRO)</option>
-                             <option value="sql">MySQL (PRO)</option>   <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
+                            <option value="sql">MySQL (PRO)</option>
+                            <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
                         </select>
                     </div>
 
@@ -510,7 +517,8 @@
                         <select id="output-format">
                             <option value="yaml">YAML</option>
                             <option value="json">JSON</option>
-                            <option value="graphql">GraphQL (PRO)</option>  <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
+                            <option value="graphql">GraphQL (PRO)</option>
+                            <!-- DXL-1 | David Morales | MySQL SQL → GraphQL Processing -->
                         </select>
                     </div>
 
@@ -551,17 +559,30 @@
             <div class="pricing-section-pro">
                 <p>Unlock Pro Features:</p>
 
+                <div class="pro-features-list"
+                    style="display: inline-block; text-align: left; margin-bottom: 25px; padding: 15px; border-radius: 8px; background-color: rgba(255,255,255,0.05); font-size: 1.05em;">
+                    <p style="margin: 6px 0;">✅ **Unlimited Bulk ZIP** File Conversions</p>
+                    <p style="margin: 6px 0;">✅ Direct **CSV & SQL Input** Parsing</p>
+                    <p style="margin: 6px 0;">✅ Instant **GraphQL, JSON & YAML Output** Generation</p>
+                </div>
+
                 <div class="pricing-buttons-row">
                     <a id="monthly-pro-button" class="pricing-link-button"
-                        href="https://buy.stripe.com/bJefZ95ax6nn5XBfUa0Ny00" target="_blank"
+                        href="https://buy.stripe.com/5kQcMXbyV8vv5XB0Zg0Ny07" target="_blank"
                         title="Start a recurring monthly subscription">
-                        Pro Monthly: $7/mo
+                        Pro Monthly: $19/mo
                     </a>
                     <span class="or-text">OR</span>
                     <a id="lifetime-pro-button" class="pricing-link-button"
-                        href="https://buy.stripe.com/fZu9AL32p8vv0DhfUa0Ny01" target="_blank"
+                        href="https://buy.stripe.com/bJe5kv7iF8vvbhVcHY0Ny09" target="_blank"
                         title="Get access forever with a single payment">
-                        Lifetime Access: $29
+                        Lifetime Access: $49
+                    </a>
+                    <span class="or-text">OR</span>
+                    <a id="yearly-pro-button" class="pricing-link-button"
+                        href="https://buy.stripe.com/6oU5kv32p7rr3Pt37o0Ny08" target="_blank"
+                        title="Start a recurring yearly subscription">
+                        Pro Yearly: $99
                     </a>
                 </div>
 
@@ -572,12 +593,12 @@
                 <div class="pro-content-center" style="border-top: none; padding-top: 0; margin-top: 0;">
                     <h2>🚀 Next Level Tooling: DataXLator Pro</h2>
 
-                    <p>We're building the future of API modernization:</p>
+                    <p>We've built the future of API modernization:</p>
 
-                    <p><strong>🔥 COMING SOON: Automated SQL CREATE TABLE to GraphQL Schema Conversion.</strong></p>
+                    <p><strong>🔥 Automated SQL CREATE TABLE to GraphQL Schema Conversion.</strong></p>
 
-                    <p class="small-text">Eliminate weeks of manual schema mapping. Get early access and be the first to
-                        know when it launches!</p>
+                    <p class="small-text">Eliminate weeks of manual schema mapping. Get early access with a free 7-day
+                        trial!</p>
 
                     <div class="email-capture-form">
                         <input type="email" id="pro-email-input" placeholder="Enter email for Pro Early Access"
